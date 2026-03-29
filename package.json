@@ -1,0 +1,60 @@
+{
+  "name": "medusa-notification-mailgun",
+  "version": "0.2.0",
+  "description": "Mailgun notification provider plugin for MedusaJS v2",
+  "license": "MIT",
+  "keywords": [
+    "medusa-plugin-integration",
+    "medusa-v2",
+    "medusa-plugin-notification",
+    "medusa",
+    "medusajs",
+    "notification",
+    "mailgun",
+    "email"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    "./providers/*": "./.medusa/server/src/providers/*/index.js",
+    "./admin": {
+      "import": "./.medusa/server/src/admin/index.mjs",
+      "require": "./.medusa/server/src/admin/index.js",
+      "default": "./.medusa/server/src/admin/index.js"
+    },
+    "./*": "./.medusa/server/src/*.js"
+  },
+  "files": [
+    ".medusa",
+    "!.medusa/server/src/admin/**/*.ts",
+    "!.medusa/server/src/admin/**/*.tsx"
+  ],
+  "scripts": {
+    "build": "medusa plugin:build",
+    "dev": "medusa plugin:develop",
+    "prepublishOnly": "medusa plugin:build"
+  },
+  "dependencies": {
+    "form-data": "^4.0.1"
+  },
+  "peerDependencies": {
+    "@medusajs/framework": ">=2.3.0",
+    "@medusajs/medusa": ">=2.3.0",
+    "mailgun.js": "^12.1.0"
+  },
+  "devDependencies": {
+    "@medusajs/admin-sdk": "^2.13.5",
+    "@medusajs/cli": "^2.13.5",
+    "@medusajs/framework": "^2.13.5",
+    "@medusajs/icons": "^2.13.5",
+    "@medusajs/medusa": "^2.13.5",
+    "@medusajs/test-utils": "^2.13.5",
+    "@medusajs/ui": "^4.0.4",
+    "@swc/core": "^1.5.7",
+    "mailgun.js": "^12.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

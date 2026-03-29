@@ -1,0 +1,9 @@
+import MailgunNotificationProviderService from "./service"
+import { ModuleProvider, Modules } from "@medusajs/framework/utils"
+
+export default ModuleProvider(Modules.NOTIFICATION, {
+  services: [MailgunNotificationProviderService],
+})
+
+export { MailgunNotificationProviderService }
+export type { MailgunOptions } from "./service"

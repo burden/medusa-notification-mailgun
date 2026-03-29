@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "lib": ["ES2021"],
+    "outDir": "./.medusa/server",
+    "rootDir": "./src",
+    "declaration": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "jsx": "react-jsx",
+    "sourceMap": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", ".medusa", "src/admin"]
+}
