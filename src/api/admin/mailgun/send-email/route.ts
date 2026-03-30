@@ -1,4 +1,4 @@
-import { MedusaError } from "@medusajs/framework/utils"
+import { MedusaError, Modules } from "@medusajs/framework/utils"
 import { AuthenticatedMedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { z } from "zod"
 import { PostAdminMailgunTestSchema } from "./middlewares"
@@ -10,6 +10,15 @@ export const POST = async (
   res: MedusaResponse
 ) => {
   const { to, subject, template, from, data } = req.validatedBody
+
+  const userService = req.scope.resolve(Modules.USER) as any
+  const matchingUsers = await userService.listUsers({ email: [to] })
+  if (!matchingUsers || matchingUsers.length === 0) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "Recipient must be a registered admin user email address"
+    )
+  }
 
   const notificationService = req.scope.resolve("notification")
 

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { defineRouteConfig } from "@medusajs/admin-sdk"
 import {
   Container,
@@ -7,6 +7,8 @@ import {
   Text,
   Label,
   Input,
+  Textarea,
+  Select,
   Button,
   IconButton,
   toast,
@@ -19,10 +21,16 @@ type VariableRow = { id: string; key: string; value: string }
 const MailgunTestPage = () => {
   const [to, setTo] = useState("")
   const [subject, setSubject] = useState("")
+  const [body, setBody] = useState("")
   const [template, setTemplate] = useState("")
   const [from, setFrom] = useState("")
   const [variables, setVariables] = useState<VariableRow[]>([])
   const [errors, setErrors] = useState<{ to?: string; subject?: string }>({})
+
+  const { data: usersData, isLoading: usersLoading } = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: () => sdk.admin.user.list(),
+  })
 
   const sendTest = useMutation({
     mutationFn: (payload: object) =>
@@ -34,6 +42,7 @@ const MailgunTestPage = () => {
       toast.success("Test email sent successfully")
       setTo("")
       setSubject("")
+      setBody("")
       setTemplate("")
       setFrom("")
       setVariables([])
@@ -60,9 +69,7 @@ const MailgunTestPage = () => {
 
   const handleSubmit = () => {
     const newErrors: typeof errors = {}
-    if (!to.trim()) newErrors.to = "Recipient email is required"
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()))
-      newErrors.to = "Enter a valid email address"
+    if (!to) newErrors.to = "Please select a recipient"
     if (!subject.trim()) newErrors.subject = "Subject is required"
 
     if (Object.keys(newErrors).length) {
@@ -78,13 +85,26 @@ const MailgunTestPage = () => {
         return acc
       }, {})
 
+    if (body.trim()) {
+      data.text = body.trim()
+    }
+
     sendTest.mutate({
-      to: to.trim(),
+      to,
       subject: subject.trim(),
       ...(template.trim() ? { template: template.trim() } : {}),
       ...(from.trim() ? { from: from.trim() } : {}),
       ...(Object.keys(data).length ? { data } : {}),
     })
+  }
+
+  const userLabel = (u: {
+    first_name?: string | null
+    last_name?: string | null
+    email: string
+  }) => {
+    const name = [u.first_name, u.last_name].filter(Boolean).join(" ")
+    return name ? `${name} <${u.email}>` : u.email
   }
 
   return (
@@ -107,13 +127,25 @@ const MailgunTestPage = () => {
           <Label htmlFor="to" size="small" weight="plus">
             Recipient *
           </Label>
-          <Input
-            id="to"
-            type="email"
-            placeholder="recipient@example.com"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-          />
+          <Text size="small" className="text-ui-fg-subtle">
+            Only registered admin users can be selected as recipients.
+          </Text>
+          <Select value={to} onValueChange={setTo} disabled={usersLoading}>
+            <Select.Trigger id="to">
+              <Select.Value
+                placeholder={
+                  usersLoading ? "Loading users…" : "Select a recipient"
+                }
+              />
+            </Select.Trigger>
+            <Select.Content>
+              {(usersData?.users ?? []).map((u) => (
+                <Select.Item key={u.id} value={u.email}>
+                  {userLabel(u)}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select>
           {errors.to && (
             <Text size="small" className="text-ui-fg-error">
               {errors.to}
@@ -140,13 +172,35 @@ const MailgunTestPage = () => {
           )}
         </div>
 
+        {/* Message body */}
+        <div className="flex flex-col gap-y-2">
+          <Label htmlFor="body" size="small" weight="plus">
+            Message body
+          </Label>
+          <Text size="small" className="text-ui-fg-subtle">
+            Optional. Plain-text body used when no Mailgun template is
+            specified. If both are left blank, a default test message is
+            sent automatically.
+          </Text>
+          <Textarea
+            id="body"
+            placeholder="Enter message body…"
+            rows={5}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            className="resize-y"
+          />
+        </div>
+
         {/* Template */}
         <div className="flex flex-col gap-y-2">
           <Label htmlFor="template" size="small" weight="plus">
             Template name
           </Label>
           <Text size="small" className="text-ui-fg-subtle">
-            Optional. Must match a template name in your Mailgun account.
+            Optional. Must match a template name in your Mailgun account. If
+            left blank, the message body above (or an auto-generated test
+            message) is used instead.
           </Text>
           <Input
             id="template"
@@ -163,7 +217,8 @@ const MailgunTestPage = () => {
             From address
           </Label>
           <Text size="small" className="text-ui-fg-subtle">
-            Optional. Overrides the default sender configured in the plugin.
+            Optional. When left blank, the sender address configured in the
+            plugin (<code>MAILGUN_FROM</code>) is used.
           </Text>
           <Input
             id="from"
