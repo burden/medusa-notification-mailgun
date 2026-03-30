@@ -13,7 +13,7 @@ export const PostAdminMailgunTestSchema = z.object({
 export const mailgunTestMiddlewares: MiddlewareRoute[] = [
   {
     method: ["POST"],
-    matcher: "/admin/mailgun/test",
+    matcher: "/admin/mailgun/send-email",
     middlewares: [validateAndTransformBody(PostAdminMailgunTestSchema)],
   },
 ]

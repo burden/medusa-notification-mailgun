@@ -26,7 +26,7 @@ const MailgunTestPage = () => {
 
   const sendTest = useMutation({
     mutationFn: (payload: object) =>
-      sdk.client.fetch("/admin/mailgun/test", {
+      sdk.client.fetch("/admin/mailgun/send-email", {
         method: "POST",
         body: payload,
       }),
