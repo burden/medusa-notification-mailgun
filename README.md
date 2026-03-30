@@ -149,6 +149,21 @@ npm test
 
 This plugin uses the official Medusa plugin toolchain (`medusa plugin:build` / `medusa plugin:develop`).
 
+### Local development with npm link
+
+To test the plugin in a local Medusa project before publishing:
+
+```bash
+# In this plugin directory — build first, then link
+npm run build
+npm link
+
+# In your Medusa project
+npm link medusa-notification-mailgun
+```
+
+> **Note:** `npm link` symlinks the package but does not rebuild automatically. Run `npm run build` in the plugin directory after any source changes, or use `npm run dev` which watches for changes and rebuilds continuously.
+
 ## Testing
 
 The test suite uses Jest with ts-jest and covers:
