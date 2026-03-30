@@ -1,5 +1,7 @@
 # medusa-notification-mailgun
 
+[![Tests](https://github.com/burden/medusa-notification-mailgun/actions/workflows/test.yml/badge.svg)](https://github.com/burden/medusa-notification-mailgun/actions/workflows/test.yml)
+
 Mailgun notification provider plugin for [MedusaJS](https://medusajs.com/) v2.
 
 Sends transactional emails via the Mailgun HTTP API. Supports stored templates (with localization), inline HTML/text, file attachments, and includes an Admin UI page for sending test emails.
