@@ -209,6 +209,71 @@ await notificationService.createNotifications({
 } as any)
 ```
 
+## Wiring up Medusa events to templates
+
+Medusa fires events for commerce operations (order placed, shipment created, password reset, etc.) but sends no email by default. To send email on an event you need two things: a **Mailgun template** and a **subscriber**.
+
+### 1. Create a template in Mailgun
+
+In your Mailgun dashboard, create a template and give it a name — e.g. `order-confirmation`. Use Handlebars syntax for dynamic content:
+
+```
+Hello {{customer_name}}, your order #{{display_id}} is confirmed.
+```
+
+### 2. Write a subscriber
+
+Subscribers live in `src/subscribers/`. Each one listens for an event, fetches the data it needs, and calls `createNotifications()` with a `template` name that matches your Mailgun template exactly.
+
+```ts
+// src/subscribers/order-placed.ts
+import { SubscriberArgs, SubscriberConfig } from "@medusajs/medusa"
+import { Modules } from "@medusajs/framework/utils"
+
+export default async function orderPlacedHandler({
+  event: { data: { id } },
+  container,
+}: SubscriberArgs<{ id: string }>) {
+  const orderService = container.resolve(Modules.ORDER)
+  const notificationService = container.resolve(Modules.NOTIFICATION)
+
+  const order = await orderService.retrieveOrder(id, {
+    relations: ["items", "shipping_address", "customer"],
+  })
+
+  await notificationService.createNotifications({
+    to: order.email,
+    channel: "email",
+    template: "order-confirmation",
+    data: {
+      subject: `Order confirmed — #${order.display_id}`,
+      display_id: order.display_id,
+      customer_name: order.customer?.first_name,
+      total: order.total,
+    },
+  })
+}
+
+export const config: SubscriberConfig = { event: "order.placed" }
+```
+
+All fields in `data` are forwarded to Mailgun as `X-Mailgun-Variables` and available as `{{variable_name}}` inside your template.
+
+### Recommended templates for a standard storefront
+
+The minimum set to have in place before going live:
+
+| Priority | Event | Template name | Why |
+|---|---|---|---|
+| 1 | `order.placed` | `order-confirmation` | Customers expect this immediately |
+| 2 | `auth.password_reset` | `password-reset` | Blocks account access without it |
+| 3 | `shipment.created` | `shipment-notification` | Reduces "where's my order" tickets |
+| 4 | `invite.created` + `invite.resent` | `admin-invite` | Required to onboard team members |
+
+Additional events worth handling later: `order.canceled`, `order.fulfillment_created`, `delivery.created`, `order.return_requested`, `order.return_received`, `customer.created`.
+
+See [`docs/medusa-notification-events.md`](docs/medusa-notification-events.md) for the full event reference, subscriber patterns for each event, and suggested template variables.
+
 ## Admin UI
 
 The plugin ships an admin extension that adds a **Mailgun Test** page to your Medusa Admin dashboard.
