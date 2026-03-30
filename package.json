@@ -15,13 +15,13 @@
   ],
   "exports": {
     "./package.json": "./package.json",
-    "./providers/*": "./.medusa/server/src/providers/*/index.js",
+    "./providers/*": "./.medusa/server/providers/*/index.js",
     "./admin": {
       "import": "./.medusa/server/src/admin/index.mjs",
       "require": "./.medusa/server/src/admin/index.js",
       "default": "./.medusa/server/src/admin/index.js"
     },
-    "./*": "./.medusa/server/src/*.js"
+    "./*": "./.medusa/server/*.js"
   },
   "files": [
     ".medusa",
