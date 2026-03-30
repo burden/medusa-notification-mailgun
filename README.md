@@ -142,9 +142,28 @@ npm run build
 
 # Start in development mode (watches for changes)
 npm run dev
+
+# Run tests
+npm test
 ```
 
 This plugin uses the official Medusa plugin toolchain (`medusa plugin:build` / `medusa plugin:develop`).
+
+## Testing
+
+The test suite uses Jest with ts-jest and covers:
+
+- Option validation (`validateOptions`)
+- All content paths (stored templates, inline HTML, plain text, fallback)
+- Localized template version selection (`t:version`)
+- Sender address resolution and subject defaults
+- Base64 attachment decoding
+- Mailgun API error wrapping
+- EU region endpoint configuration
+
+```bash
+npm test
+```
 
 ## License
 
