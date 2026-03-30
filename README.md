@@ -77,6 +77,25 @@ await notificationService.send({
 
 Template variables are passed to Mailgun via the `X-Mailgun-Variables` header for server-side rendering.
 
+### Localized templates
+
+The plugin supports Mailgun's [template versions](https://documentation.mailgun.com/docs/mailgun/api-reference/openapi-final/tag/Templates/) for localization. Create versions of your template in the Mailgun dashboard tagged by locale (e.g., `en`, `fr`, `de`), then pass `locale` in `data`:
+
+```ts
+await notificationService.send({
+  to: "customer@example.com",
+  channel: "email",
+  template: "order-confirmation",
+  data: {
+    locale: "fr",
+    subject: "Commande confirmée",
+    order_id: "ord_123",
+  },
+})
+```
+
+When `locale` is present, the plugin sets the Mailgun `t:version` header to select the matching template version. If omitted, Mailgun uses the default version.
+
 ### Inline HTML
 
 ```ts

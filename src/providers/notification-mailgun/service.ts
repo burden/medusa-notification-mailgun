@@ -87,6 +87,9 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
     if (template) {
       messagePayload.template = template
       messagePayload["h:X-Mailgun-Variables"] = JSON.stringify(data || {})
+      if (data?.locale) {
+        messagePayload["t:version"] = data.locale as string
+      }
     } else if (data?.html) {
       messagePayload.html = data.html as string
     } else if (data?.text) {
