@@ -1,0 +1,150 @@
+import { MedusaError } from "@medusajs/framework/utils"
+import { POST } from "./route"
+
+function makeReq(body: Record<string, unknown>) {
+  return {
+    validatedBody: body,
+    scope: {
+      resolve: jest.fn().mockReturnValue(mockNotificationService),
+    },
+  } as any
+}
+
+function makeRes() {
+  return { json: jest.fn() } as any
+}
+
+const mockCreateNotifications = jest.fn()
+
+const mockNotificationService = {
+  createNotifications: mockCreateNotifications,
+}
+
+beforeEach(() => {
+  mockCreateNotifications.mockReset()
+})
+
+describe("POST /admin/mailgun/test", () => {
+  describe("success", () => {
+    it("calls createNotifications with correct shape", async () => {
+      mockCreateNotifications.mockResolvedValue({ id: "notif-1" })
+      const req = makeReq({ to: "user@example.com", subject: "Hello", data: { name: "Alice" }, template: "welcome" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      expect(mockCreateNotifications).toHaveBeenCalledWith({
+        to: "user@example.com",
+        channel: "email",
+        template: "welcome",
+        data: { name: "Alice", subject: "Hello" },
+      })
+    })
+
+    it("returns success with notification_id", async () => {
+      mockCreateNotifications.mockResolvedValue({ id: "notif-2" })
+      const req = makeReq({ to: "user@example.com", subject: "Hi", template: "t1" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      expect(res.json).toHaveBeenCalledWith({ success: true, notification_id: "notif-2" })
+    })
+
+    it("falls back to result itself when no .id on response", async () => {
+      mockCreateNotifications.mockResolvedValue("raw-result")
+      const req = makeReq({ to: "user@example.com", subject: "Hi", template: "t1" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      expect(res.json).toHaveBeenCalledWith({ success: true, notification_id: "raw-result" })
+    })
+
+    it("uses __inline__ template when none provided", async () => {
+      mockCreateNotifications.mockResolvedValue({ id: "notif-3" })
+      const req = makeReq({ to: "user@example.com", subject: "No template" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      expect(mockCreateNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({ template: "__inline__" })
+      )
+    })
+
+    it("injects fallback text when no template, html, or text", async () => {
+      mockCreateNotifications.mockResolvedValue({ id: "notif-4" })
+      const req = makeReq({ to: "user@example.com", subject: "Fallback" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      expect(mockCreateNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ text: "Test email — subject: Fallback" }),
+        })
+      )
+    })
+
+    it("does not inject fallback text when template is provided", async () => {
+      mockCreateNotifications.mockResolvedValue({ id: "notif-5" })
+      const req = makeReq({ to: "user@example.com", subject: "With template", template: "my-tpl" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      const payload = mockCreateNotifications.mock.calls[0][0]
+      expect(payload.data.text).toBeUndefined()
+    })
+
+    it("includes from when provided", async () => {
+      mockCreateNotifications.mockResolvedValue({ id: "notif-6" })
+      const req = makeReq({ to: "user@example.com", subject: "Hi", from: "custom@sender.com", template: "t1" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      expect(mockCreateNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({ from: "custom@sender.com" })
+      )
+    })
+
+    it("omits from when not provided", async () => {
+      mockCreateNotifications.mockResolvedValue({ id: "notif-7" })
+      const req = makeReq({ to: "user@example.com", subject: "Hi", template: "t1" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      const payload = mockCreateNotifications.mock.calls[0][0]
+      expect(payload.from).toBeUndefined()
+    })
+  })
+
+  describe("error handling", () => {
+    it("wraps notification service errors in MedusaError", async () => {
+      mockCreateNotifications.mockRejectedValue(new Error("Provider unavailable"))
+      const req = makeReq({ to: "user@example.com", subject: "Hi", template: "t1" })
+      const res = makeRes()
+
+      await expect(POST(req, res)).rejects.toThrow("Failed to send test email: Provider unavailable")
+    })
+
+    it("throws MedusaError of type UNEXPECTED_STATE", async () => {
+      mockCreateNotifications.mockRejectedValue(new Error("oops"))
+      const req = makeReq({ to: "user@example.com", subject: "Hi", template: "t1" })
+      const res = makeRes()
+
+      await expect(POST(req, res)).rejects.toBeInstanceOf(MedusaError)
+    })
+
+    it("handles errors without a message", async () => {
+      mockCreateNotifications.mockRejectedValue({})
+      const req = makeReq({ to: "user@example.com", subject: "Hi", template: "t1" })
+      const res = makeRes()
+
+      await expect(POST(req, res)).rejects.toThrow("Failed to send test email: Unknown error")
+    })
+  })
+})
