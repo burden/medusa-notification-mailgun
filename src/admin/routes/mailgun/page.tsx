@@ -16,7 +16,7 @@ import {
   Badge,
   Tooltip,
 } from "@medusajs/ui"
-import { EnvelopeSolid, PlusMini, Trash, InformationCircleSolid } from "@medusajs/icons"
+import { EnvelopeSolid, PlusMini, Trash } from "@medusajs/icons"
 import { sdk } from "../../lib/sdk"
 
 // ---------------------------------------------------------------------------
@@ -340,7 +340,6 @@ const SendTestTab = () => {
 
 const ChecklistTab = () => {
   const [checklistEnabled, setChecklistEnabled] = useState(false)
-  const [expandedHint, setExpandedHint] = useState<string | null>(null)
   const [, forceUpdate] = useState(0)
 
   const { data: checklist, isFetching, isError, error, refetch } = useQuery<ChecklistResponse>({
@@ -366,12 +365,6 @@ const ChecklistTab = () => {
     const interval = setInterval(() => forceUpdate((n) => n + 1), 60_000)
     return () => clearInterval(interval)
   }, [checklist])
-
-  const statusBorderClass = (status: "pass" | "warn" | "fail") => {
-    if (status === "pass") return "border-l-4 border-green-500 bg-ui-bg-subtle"
-    if (status === "warn") return "border-l-4 border-orange-400 bg-ui-bg-subtle"
-    return "border-l-4 border-red-500 bg-ui-bg-subtle"
-  }
 
   const statusMessage = (status: "pass" | "warn" | "fail", inlineCount: number) => {
     const inlineNote = inlineCount > 0
@@ -435,7 +428,7 @@ const ChecklistTab = () => {
 
       {/* Top-level status bar */}
       {checklist && !isError && (
-        <div className={`px-4 py-3 rounded ${statusBorderClass(checklist.status)}`}>
+        <div className={`px-4 py-3 rounded border-l-4 border-grey-500 bg-ui-bg-subtle`}>
           <Text size="small">{statusMessage(checklist.status, checklist.inline_count)}</Text>
         </div>
       )}
@@ -465,7 +458,7 @@ const ChecklistTab = () => {
       {checklist && !isError && checklist.events.length > 0 && (
         <div className="flex flex-col">
           {/* Header */}
-          <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-x-4 py-2 border-b border-ui-border-base">
+          <div className="grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-x-4 py-2 pl-4 border-b border-ui-border-base">
             <Text size="xsmall" className="text-ui-fg-muted uppercase tracking-wide">Event</Text>
             <Text size="xsmall" className="text-ui-fg-muted uppercase tracking-wide">File</Text>
             <Text size="xsmall" className="text-ui-fg-muted uppercase tracking-wide">Subscriber</Text>
@@ -475,76 +468,58 @@ const ChecklistTab = () => {
 
           {/* Rows */}
           {checklist.events.map((event, index) => (
-            <div key={event.event} className="flex flex-col">
-              {/* Main row */}
-              <div
-                className={`grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-x-4 py-3 items-center border-b border-ui-border-base ${
-                  index % 2 === 0 ? "bg-ui-bg-base" : "bg-ui-bg-subtle"
-                }`}
-              >
-                {/* Event name */}
+            <div
+              key={event.event}
+              className={`grid grid-cols-[2fr_2fr_1fr_1fr_1fr] gap-x-4 py-3 pl-4 items-start border-b border-ui-border-base border-l-4 ${
+                event.status === "fail"
+                  ? "border-l-red-500"
+                  : event.status === "warn"
+                  ? "border-l-orange-400"
+                  : "border-l-green-500"
+              } ${index % 2 === 0 ? "bg-ui-bg-base" : "bg-ui-bg-subtle"}`}
+            >
+              {/* Event name + hint */}
+              <div className="flex flex-col gap-y-1">
                 <span className="font-mono text-sm">{event.event}</span>
-
-                {/* Subscriber file */}
-                <Text size="small" className="text-ui-fg-subtle font-mono truncate">
-                  {event.subscriber_file ?? "—"}
-                </Text>
-
-                {/* Subscriber found badge */}
-                <div>
-                  {event.subscriber_found ? (
-                    <Badge color="green">Found</Badge>
-                  ) : (
-                    <Badge color="red">Missing</Badge>
-                  )}
-                </div>
-
-                {/* Template exists badge */}
-                <div>
-                  {event.status === "inline" ? (
-                    <Badge color="grey">—</Badge>
-                  ) : event.template_exists_in_mailgun === true ? (
-                    <Badge color="green">Found</Badge>
-                  ) : event.template_exists_in_mailgun === false ? (
-                    <Badge color="red">Missing</Badge>
-                  ) : (
-                    <Badge color="grey">—</Badge>
-                  )}
-                </div>
-
-                {/* Status badge + hint icon */}
-                <div className="flex items-center gap-x-1">
-                  {event.status === "pass" && <Badge color="green">Pass</Badge>}
-                  {event.status === "warn" && <Badge color="orange">Warn</Badge>}
-                  {event.status === "inline" && <Badge color="grey">Inline</Badge>}
-                  {event.status === "fail" && <Badge color="red">Fail</Badge>}
-                  {event.hint && (
-                    <button
-                      type="button"
-                      className="text-ui-fg-subtle hover:text-ui-fg-base focus:outline-none"
-                      onClick={() =>
-                        setExpandedHint(
-                          expandedHint === event.event ? null : event.event
-                        )
-                      }
-                      title="Show hint"
-                    >
-                      <InformationCircleSolid className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
+                {event.hint && (
+                  <Text size="xsmall" className="text-ui-fg-subtle">{event.hint}</Text>
+                )}
               </div>
 
-              {/* Hint subrow */}
-              {expandedHint === event.event && event.hint && (
-                <div
-                  className={`col-span-5 bg-ui-bg-subtle px-4 py-2 rounded border-b border-ui-border-base ${
-                    index % 2 === 0 ? "bg-ui-bg-base" : "bg-ui-bg-subtle"
-                  }`}
-                >
-                  <Text size="small">Hint: {event.hint}</Text>
-                </div>
-              )}
+              {/* Subscriber file */}
+              <Text size="small" className="text-ui-fg-subtle font-mono truncate">
+                {event.subscriber_file ?? "—"}
+              </Text>
+
+              {/* Subscriber found badge */}
+              <div>
+                {event.subscriber_found ? (
+                  <Badge color="green">Found</Badge>
+                ) : (
+                  <Badge color="red">Missing</Badge>
+                )}
+              </div>
+
+              {/* Template exists badge */}
+              <div>
+                {event.status === "inline" ? (
+                  <Badge color="grey">—</Badge>
+                ) : event.template_exists_in_mailgun === true ? (
+                  <Badge color="green">Found</Badge>
+                ) : event.template_exists_in_mailgun === false ? (
+                  <Badge color="red">Missing</Badge>
+                ) : (
+                  <Badge color="grey">—</Badge>
+                )}
+              </div>
+
+              {/* Status badge */}
+              <div>
+                {event.status === "pass" && <Badge color="green">Pass</Badge>}
+                {event.status === "warn" && <Badge color="orange">Warn</Badge>}
+                {event.status === "inline" && <Badge color="grey">Inline</Badge>}
+                {event.status === "fail" && <Badge color="red">Fail</Badge>}
+              </div>
             </div>
           ))}
         </div>
