@@ -32,7 +32,7 @@ describe("scanSubscribers", () => {
     for (const result of results) {
       expect(result.subscriber_found).toBe(false)
       expect(result.subscriber_file).toBeNull()
-      expect(result.template_name_in_subscriber).toBe(false)
+      expect(result.template_name_in_subscriber).toBeNull()
     }
     expect(mockReaddirSync).not.toHaveBeenCalled()
   })
@@ -49,23 +49,39 @@ describe("scanSubscribers", () => {
     const orderPlaced = results.find((r) => r.event === "order.placed")!
 
     expect(orderPlaced.subscriber_found).toBe(true)
-    expect(orderPlaced.template_name_in_subscriber).toBe(true)
+    expect(orderPlaced.template_name_in_subscriber).toBe("order-confirmation")
     expect(orderPlaced.subscriber_file).toBe("src/subscribers/order.ts")
   })
 
-  it("returns subscriber_found true but template_name_in_subscriber false when template string is absent", () => {
+  it("returns the actual template name even when it differs from expected_template", () => {
     mockExistsSync.mockReturnValue(true)
     mockReaddirSync.mockReturnValue(["order.ts"])
     mockReadFileSync.mockReturnValue(
       `export const config = { event: "order.placed" }
-       createNotifications({ template: "wrong-template" })`
+       createNotifications({ template: "my-custom-order-template" })`
     )
 
     const results = scanSubscribers("/fake/cwd", eventMap)
     const orderPlaced = results.find((r) => r.event === "order.placed")!
 
     expect(orderPlaced.subscriber_found).toBe(true)
-    expect(orderPlaced.template_name_in_subscriber).toBe(false)
+    expect(orderPlaced.template_name_in_subscriber).toBe("my-custom-order-template")
+    expect(orderPlaced.subscriber_file).toBe("src/subscribers/order.ts")
+  })
+
+  it("returns null for template_name_in_subscriber when no static template key is present", () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReaddirSync.mockReturnValue(["order.ts"])
+    mockReadFileSync.mockReturnValue(
+      `export const config = { event: "order.placed" }
+       createNotifications({ body: "<p>Hello</p>" })`
+    )
+
+    const results = scanSubscribers("/fake/cwd", eventMap)
+    const orderPlaced = results.find((r) => r.event === "order.placed")!
+
+    expect(orderPlaced.subscriber_found).toBe(true)
+    expect(orderPlaced.template_name_in_subscriber).toBeNull()
     expect(orderPlaced.subscriber_file).toBe("src/subscribers/order.ts")
   })
 
@@ -79,7 +95,7 @@ describe("scanSubscribers", () => {
 
     expect(orderPlaced.subscriber_found).toBe(false)
     expect(orderPlaced.subscriber_file).toBeNull()
-    expect(orderPlaced.template_name_in_subscriber).toBe(false)
+    expect(orderPlaced.template_name_in_subscriber).toBeNull()
   })
 
   it("does not match event name when dots are unescaped (e.g. orderXplaced)", () => {
@@ -162,11 +178,11 @@ describe("scanSubscribers", () => {
     const placed = results.find((r) => r.event === "order.placed")!
     expect(placed.subscriber_found).toBe(true)
     expect(placed.subscriber_file).toBe("src/subscribers/order-placed.ts")
-    expect(placed.template_name_in_subscriber).toBe(true)
+    expect(placed.template_name_in_subscriber).toBe("order-confirmation")
 
     const canceled = results.find((r) => r.event === "order.canceled")!
     expect(canceled.subscriber_found).toBe(true)
     expect(canceled.subscriber_file).toBe("src/subscribers/order-canceled.ts")
-    expect(canceled.template_name_in_subscriber).toBe(true)
+    expect(canceled.template_name_in_subscriber).toBe("order-canceled")
   })
 })

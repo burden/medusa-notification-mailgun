@@ -56,7 +56,7 @@ export const GET = async (
     expected_template: string
     subscriber_file: string | null
     subscriber_found: boolean
-    template_name_in_subscriber: boolean
+    template_name_in_subscriber: string | null
     template_exists_in_mailgun: boolean | null
     status: "pass" | "warn" | "inline" | "fail"
     hint?: string
@@ -72,14 +72,14 @@ export const GET = async (
       hint = `No subscriber found for event "${scan.event}". Create src/subscribers/<name>.ts with config: { event: "${scan.event}" } and call createNotifications with template: "${scan.expected_template}".`
     } else if (!scan.template_name_in_subscriber) {
       status = "inline"
-      hint = `Subscriber found, but the expected template name "${scan.expected_template}" is not referenced in the file. If this subscriber sends inline HTML or plain text, this is expected. If you intended to use Mailgun templates, add template: "${scan.expected_template}" to your createNotifications call.`
+      hint = `Subscriber found but no static template name was detected. If this subscriber sends inline HTML or plain text, this is expected. If you intended to use Mailgun templates, add template: "your-template-name" to your createNotifications call.`
     } else {
-      templateExistsInMailgun = templateSet !== null ? templateSet.has(scan.expected_template) : null
+      templateExistsInMailgun = templateSet !== null ? templateSet.has(scan.template_name_in_subscriber) : null
       if (templateExistsInMailgun === true) {
         status = "pass"
       } else {
         status = "warn"
-        hint = `Subscriber is correctly wired but template "${scan.expected_template}" was not found in Mailgun. Create it in your Mailgun dashboard.`
+        hint = `Subscriber references template "${scan.template_name_in_subscriber}" but it was not found in Mailgun. Create it in your Mailgun dashboard.`
       }
     }
 

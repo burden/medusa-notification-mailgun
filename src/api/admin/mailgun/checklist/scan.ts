@@ -26,7 +26,7 @@ export type SubscriberScanResult = {
   expected_template: string
   subscriber_file: string | null
   subscriber_found: boolean
-  template_name_in_subscriber: boolean
+  template_name_in_subscriber: string | null
 }
 
 export function scanSubscribers(cwd: string, eventMap: EventCheckConfig[]): SubscriberScanResult[] {
@@ -38,7 +38,7 @@ export function scanSubscribers(cwd: string, eventMap: EventCheckConfig[]): Subs
       expected_template: cfg.expected_template,
       subscriber_file: null,
       subscriber_found: false,
-      template_name_in_subscriber: false,
+      template_name_in_subscriber: null,
     }))
   }
 
@@ -64,9 +64,12 @@ export function scanSubscribers(cwd: string, eventMap: EventCheckConfig[]): Subs
     }]
   })
 
+  // Extracts the first static string value assigned to a `template` key in the file.
+  // Matches patterns like: template: "my-template" or template: 'my-template'
+  const templateValuePattern = /\btemplate\s*:\s*["']([^"']+)["']/
+
   return eventMap.map((cfg) => {
     const eventPattern = new RegExp(`["']${cfg.event.replace(/\./g, "\\.")}["']`)
-    const templatePattern = new RegExp(`["']${cfg.expected_template}["']`)
 
     const match = fileContents.find((fc) => eventPattern.test(fc.content))
 
@@ -76,16 +79,18 @@ export function scanSubscribers(cwd: string, eventMap: EventCheckConfig[]): Subs
         expected_template: cfg.expected_template,
         subscriber_file: null,
         subscriber_found: false,
-        template_name_in_subscriber: false,
+        template_name_in_subscriber: null,
       }
     }
+
+    const templateMatch = templateValuePattern.exec(match.content)
 
     return {
       event: cfg.event,
       expected_template: cfg.expected_template,
       subscriber_file: match.relPath,
       subscriber_found: true,
-      template_name_in_subscriber: templatePattern.test(match.content),
+      template_name_in_subscriber: templateMatch ? templateMatch[1] : null,
     }
   })
 }

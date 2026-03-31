@@ -123,6 +123,8 @@ The `data` object controls how the email is built and carries template variables
 | `locale`  | `string` | Selects a Mailgun template version (e.g. `"fr"`, `"de"`). Only used when `template` is set. |
 | `html`    | `string` | Inline HTML body. Used when no `template` is set.                           |
 | `text`    | `string` | Plain-text body. Used when neither `template` nor `html` is set.            |
+| `from`    | `string` | Per-notification sender address override. Takes precedence over the top-level `from` field only when the top-level field is not set. |
+| `replyTo` | `string` | Sets the `Reply-To` header on the outgoing message.                         |
 | any other | `string` | Additional keys are passed to Mailgun as template variables.                |
 
 ### Content selection
@@ -285,7 +287,7 @@ The plugin adds a **Mailgun** page to the Medusa admin sidebar (envelope icon). 
 The page has two tabs:
 
 - **Send Test** — form to send a test email to a registered admin user. Fields: recipient (dropdown of admin users), subject, optional message body, optional template name, optional from-address override, and optional key-value template variables.
-- **Event Checklist** — runs `GET /admin/mailgun/checklist` and displays per-event status as a table. Shows whether each tracked event has a subscriber, whether the subscriber references the expected template name, and whether that template exists in Mailgun.
+- **Event Checklist** — runs `GET /admin/mailgun/checklist` and displays per-event status as a table. Shows whether each tracked event has a subscriber, what template name was detected in the subscriber, and whether that template exists in Mailgun.
 
 ## Admin API: send test email
 
@@ -341,16 +343,16 @@ Authorization: Bearer <admin-jwt>
 Returns a diagnostic report for all tracked Medusa events. For each event, the endpoint checks:
 
 1. Whether a subscriber file exists in `src/subscribers/` that references the event name.
-2. Whether that subscriber file also contains the expected Mailgun template name as a string literal.
-3. Whether that template exists in your Mailgun account (requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` in the environment).
+2. Whether that subscriber file contains a static `template:` string literal, and what its value is.
+3. Whether that template exists in your Mailgun account (requires `api_key` and `domain` to be set in the plugin options in `medusa-config.ts`).
 
 Per-event status values:
 
 | Status   | Meaning                                                                         |
 |----------|---------------------------------------------------------------------------------|
-| `pass`   | Subscriber found, references the expected template, and that template exists in Mailgun. |
-| `warn`   | Subscriber correctly references the template, but the template does not exist in Mailgun yet. |
-| `inline` | Subscriber found, but the expected template name is not in the file. The subscriber may be using inline HTML or plain text. |
+| `pass`   | Subscriber found, a static template name was detected in the file, and that template exists in Mailgun. |
+| `warn`   | Subscriber found and a static template name was detected, but that template does not exist in Mailgun yet. |
+| `inline` | Subscriber found, but no static template name was detected. The subscriber may be using inline HTML or plain text. |
 | `fail`   | No subscriber found for this event.                                             |
 
 The top-level `status` rolls up the worst result across all events, excluding `inline`. `inline` events do not cause a `warn` or `fail` rollup.
