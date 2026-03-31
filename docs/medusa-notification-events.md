@@ -1,32 +1,54 @@
-# Medusa Notification Events
+# How to wire Medusa events to Mailgun templates
 
-Medusa emits events for commerce operations but **sends no email by default**. There are no built-in subscribers — every email you want sent requires a subscriber you write, a Mailgun template you create, and a `createNotifications()` call that wires them together.
+Medusa emits events for commerce operations — order placed, shipment created, password reset, and more — but **sends no email by default**. There are no built-in subscribers. Every email you want sent requires three things you write and configure yourself:
 
-Event payloads contain only `{ id }`. Your subscriber must fetch the full object (order, customer, etc.) before it can populate a template.
+1. A **Mailgun template** in your Mailgun dashboard
+2. A **subscriber file** in `src/subscribers/` that listens for the event
+3. A **`createNotifications()` call** in that subscriber that passes the template name and data
 
-## Full event reference
+This guide covers the full pattern and walks through the most important events. For a step-by-step walkthrough of the first email from scratch, see the [quickstart](./quickstart.md).
 
-### Customer-facing (storefront UX)
+## Prerequisites
 
-| Event | Suggested template name | Notes |
-|---|---|---|
-| `order.placed` | `order-confirmation` | Most critical — sent immediately after checkout |
-| `order.canceled` | `order-canceled` | |
-| `order.fulfillment_created` | `order-shipped` | Triggered when admin creates a fulfillment |
-| `shipment.created` | `shipment-notification` | Triggered when shipment tracking is added |
-| `delivery.created` | `order-delivered` | Optional |
-| `order.return_requested` | `return-confirmed` | Confirms return was initiated by customer |
-| `order.return_received` | `return-received` | Admin marked return as received |
-| `order.exchange_created` | `exchange-created` | If you use exchanges |
-| `auth.password_reset` | `password-reset` | Fired for both customers and admin users |
-| `customer.created` | `welcome` | Optional welcome email on registration |
+- Plugin installed and registered in `medusa-config.ts` (see [README installation](../README.md#installation))
+- A Mailgun account with a verified sending domain
 
-### Admin-facing
+## How subscribers work
 
-| Event | Suggested template name | Notes |
-|---|---|---|
-| `invite.created` | `admin-invite` | Fired when an admin user is invited |
-| `invite.resent` | `admin-invite` | Same template — token was refreshed |
+Medusa event payloads contain only `{ id }`. Your subscriber must fetch the full object — order, customer, etc. — before it can populate a template.
+
+The general pattern:
+
+```ts
+// src/subscribers/<event-name>.ts
+import { SubscriberArgs, SubscriberConfig } from "@medusajs/medusa"
+import { Modules } from "@medusajs/framework/utils"
+
+export default async function myHandler({
+  event: { data: { id } },
+  container,
+}: SubscriberArgs<{ id: string }>) {
+  const thingService = container.resolve(Modules.THING)
+  const notificationService = container.resolve(Modules.NOTIFICATION)
+
+  const thing = await thingService.retrieveThing(id, { relations: [...] })
+
+  await notificationService.createNotifications({
+    to: thing.email,
+    channel: "email",
+    template: "my-mailgun-template-name",
+    data: {
+      subject: "...",
+      variable_one: thing.field,
+      variable_two: thing.other_field,
+    },
+  })
+}
+
+export const config: SubscriberConfig = { event: "thing.event_name" }
+```
+
+The `template` string must match the template name in your Mailgun dashboard exactly. All fields in `data` are forwarded as Handlebars variables (e.g. `{{variable_one}}`).
 
 ## Practical starting point
 
@@ -37,11 +59,9 @@ For a launch-ready storefront, implement these four first:
 3. **`order-shipped`** / **`shipment-notification`** — the most common source of "where's my order" support tickets
 4. **`admin-invite`** (`invite.created` + `invite.resent`) — required to onboard team members to the admin dashboard
 
-The remaining events can be added later. Medusa fires the event and continues regardless of whether a subscriber handles it — nothing breaks if a template is missing.
+The remaining events can be added later. Medusa fires events and continues regardless of whether a subscriber handles them — nothing breaks if a template is missing.
 
-## Subscriber pattern
-
-Each subscriber follows the same shape. The `order.placed` example:
+## Order placed
 
 ```ts
 // src/subscribers/order-placed.ts
@@ -66,9 +86,9 @@ export default async function orderPlacedHandler({
     data: {
       subject: `Order confirmed — #${order.display_id}`,
       order_id: order.id,
-      display_id: order.display_id,
+      display_id: String(order.display_id),
       customer_name: order.customer?.first_name,
-      total: order.total,
+      total: String(order.total),
     },
   })
 }
@@ -76,11 +96,9 @@ export default async function orderPlacedHandler({
 export const config: SubscriberConfig = { event: "order.placed" }
 ```
 
-The `template` string must match the template name in your Mailgun dashboard exactly. All fields in `data` are forwarded as Handlebars variables (e.g. `{{order_id}}`, `{{customer_name}}`).
+## Password reset
 
-## Password reset specifics
-
-The `auth.password_reset` event payload includes `actor_type` to distinguish customers from admin users, and a `token` used to build the reset URL:
+The `auth.password_reset` event is shared between customers and admin users. The payload includes `actor_type` to distinguish them and a `token` to build the reset URL. The subscriber does not need to fetch a separate object — all required data arrives in the event payload.
 
 ```ts
 // src/subscribers/reset-password.ts
@@ -112,9 +130,33 @@ export default async function resetPasswordHandler({
 export const config: SubscriberConfig = { event: "auth.password_reset" }
 ```
 
+## Full event reference
+
+### Customer-facing (storefront UX)
+
+| Event | Suggested template name | Notes |
+|---|---|---|
+| `order.placed` | `order-confirmation` | Most critical — sent immediately after checkout |
+| `order.canceled` | `order-canceled` | |
+| `order.fulfillment_created` | `order-shipped` | Triggered when admin creates a fulfillment |
+| `shipment.created` | `shipment-notification` | Triggered when shipment tracking is added |
+| `delivery.created` | `order-delivered` | Optional |
+| `order.return_requested` | `return-confirmed` | Confirms return was initiated by customer |
+| `order.return_received` | `return-received` | Admin marked return as received |
+| `order.exchange_created` | `exchange-created` | If you use exchanges |
+| `auth.password_reset` | `password-reset` | Fired for both customers and admin users |
+| `customer.created` | `welcome` | Optional welcome email on registration |
+
+### Admin-facing
+
+| Event | Suggested template name | Notes |
+|---|---|---|
+| `invite.created` | `admin-invite` | Fired when an admin user is invited |
+| `invite.resent` | `admin-invite` | Same template — token was refreshed |
+
 ## Template variables reference
 
-Common variables to define in your Mailgun templates by event:
+Common variables to pass in `data` for each event:
 
 | Template | Variables |
 |---|---|

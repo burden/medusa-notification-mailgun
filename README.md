@@ -8,6 +8,8 @@ Sends transactional emails via the Mailgun HTTP API. Supports stored templates (
 
 **Requires MedusaJS v2.3.0 or later.**
 
+**In a hurry?** Start with the [quickstart](docs/quickstart.md) — install to first email in ~15 minutes.
+
 ## What this plugin provides
 
 - **Notification provider** — registers `mailgun` as a notification provider for the `email` channel. Called automatically by Medusa when you use `createNotifications()` in a subscriber.
@@ -228,57 +230,21 @@ await notificationService.createNotifications({
 } as any)
 ```
 
+## How the plugin makes decisions
+
+**Content selection order**: When `createNotifications()` is called, the plugin picks the message body using this priority: `template` first, then `data.html`, then `data.text`, then a JSON-stringified fallback. Mailgun stored templates are the primary use case — inline HTML and plain text exist for notifications where you want to generate content dynamically in code rather than maintain a template in the Mailgun dashboard.
+
+**Sender address resolution**: The `from` field can be set at three levels: the plugin `options` in `medusa-config.ts`, the notification-level `from` field in `createNotifications()`, and `data.from`. The notification-level `from` field always wins. `data.from` only applies when no plugin-level `from` is configured — if you have set `from` in your plugin options, `data.from` is ignored. Use the notification-level `from` (not `data.from`) for reliable per-notification overrides.
+
+**Checklist uses static analysis**: The `GET /admin/mailgun/checklist` endpoint checks your setup by reading subscriber files as text, not by running them. It looks for the string `template: "your-template-name"` as a literal in the file. This means it works without running your application and without needing live data — but it also means dynamically constructed template names (e.g. `template: getTemplateName(event)`) will appear as `inline` status rather than `pass`. See [`docs/checklist-endpoint.md`](docs/checklist-endpoint.md) for details on what the checklist does and does not verify.
+
 ## Wiring up Medusa events to templates
 
-Medusa fires events for commerce operations (order placed, shipment created, password reset, etc.) but sends no email by default. To send email on an event you need two things: a **Mailgun template** and a **subscriber**.
+Medusa fires events for commerce operations (order placed, shipment created, password reset, etc.) but sends no email by default. To send email on an event you need a Mailgun template and a subscriber that calls `createNotifications()` when the event fires.
 
-### 1. Create a template in Mailgun
+See [`docs/medusa-notification-events.md`](docs/medusa-notification-events.md) for the complete how-to guide: subscriber patterns for each event, the full event reference, and suggested template variables.
 
-In your Mailgun dashboard, create a template and give it a name — e.g. `order-confirmation`. Use Handlebars syntax for dynamic content:
-
-```
-Hello {{customer_name}}, your order #{{display_id}} is confirmed.
-```
-
-### 2. Write a subscriber
-
-Subscribers live in `src/subscribers/`. Each one listens for an event, fetches the data it needs, and calls `createNotifications()` with a `template` name that matches your Mailgun template exactly.
-
-```ts
-// src/subscribers/order-placed.ts
-import { SubscriberArgs, SubscriberConfig } from "@medusajs/medusa"
-import { Modules } from "@medusajs/framework/utils"
-
-export default async function orderPlacedHandler({
-  event: { data: { id } },
-  container,
-}: SubscriberArgs<{ id: string }>) {
-  const orderService = container.resolve(Modules.ORDER)
-  const notificationService = container.resolve(Modules.NOTIFICATION)
-
-  const order = await orderService.retrieveOrder(id, {
-    relations: ["items", "shipping_address", "customer"],
-  })
-
-  await notificationService.createNotifications({
-    to: order.email,
-    channel: "email",
-    template: "order-confirmation",
-    data: {
-      subject: `Order confirmed — #${order.display_id}`,
-      display_id: order.display_id,
-      customer_name: order.customer?.first_name,
-      total: order.total,
-    },
-  })
-}
-
-export const config: SubscriberConfig = { event: "order.placed" }
-```
-
-All fields in `data` are forwarded to Mailgun as `h:X-Mailgun-Variables` and available as `{{variable_name}}` inside your template.
-
-See [`docs/medusa-notification-events.md`](docs/medusa-notification-events.md) for the full event reference, subscriber patterns for each event, and suggested template variables.
+New to the plugin? The [quickstart](docs/quickstart.md) walks through the full setup end-to-end.
 
 ## Admin UI
 
