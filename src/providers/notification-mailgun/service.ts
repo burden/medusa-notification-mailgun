@@ -125,6 +125,20 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
       )
     }
   }
+
+  async getTemplates(): Promise<string[]> {
+    try {
+      const client = await this.initializeClient_()
+      const result = await client.domains.domainTemplates.list(this.domain_)
+      return (result?.items ?? []).map((t: { name: string }) => t.name)
+    } catch (error: any) {
+      const message = error?.message || "Unknown error"
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Mailgun templates fetch failed: ${message}`
+      )
+    }
+  }
 }
 
 export default MailgunNotificationProviderService

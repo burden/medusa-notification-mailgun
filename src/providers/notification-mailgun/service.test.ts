@@ -3,6 +3,7 @@ import MailgunNotificationProviderService from "./service"
 import type { MailgunOptions } from "./service"
 
 const mockCreate = jest.fn()
+const mockListTemplates = jest.fn()
 
 jest.mock("mailgun.js", () => {
   return {
@@ -10,6 +11,7 @@ jest.mock("mailgun.js", () => {
     default: jest.fn().mockImplementation(() => ({
       client: jest.fn().mockReturnValue({
         messages: { create: mockCreate },
+        domains: { domainTemplates: { list: mockListTemplates } },
       }),
     })),
   }
@@ -28,6 +30,7 @@ function createService(opts: MailgunOptions = defaultOptions) {
 
 beforeEach(() => {
   mockCreate.mockReset()
+  mockListTemplates.mockReset()
 })
 
 describe("validateOptions", () => {
@@ -342,7 +345,57 @@ describe("send", () => {
     })
   })
 
-  describe("EU region", () => {
+  describe("getTemplates", () => {
+  it("returns template names from items array", async () => {
+    mockListTemplates.mockResolvedValue({
+      items: [{ name: "welcome" }, { name: "order-confirmation" }],
+    })
+    const service = createService()
+
+    const result = await service.getTemplates()
+
+    expect(mockListTemplates).toHaveBeenCalledWith("mail.example.com")
+    expect(result).toEqual(["welcome", "order-confirmation"])
+  })
+
+  it("returns empty array when items is empty", async () => {
+    mockListTemplates.mockResolvedValue({ items: [] })
+    const service = createService()
+
+    const result = await service.getTemplates()
+
+    expect(result).toEqual([])
+  })
+
+  it("returns empty array when items key is absent", async () => {
+    mockListTemplates.mockResolvedValue({})
+    const service = createService()
+
+    const result = await service.getTemplates()
+
+    expect(result).toEqual([])
+  })
+
+  it("wraps API errors in MedusaError", async () => {
+    mockListTemplates.mockRejectedValue(new Error("Unauthorized"))
+    const service = createService()
+
+    await expect(service.getTemplates()).rejects.toThrow(
+      "Mailgun templates fetch failed: Unauthorized"
+    )
+  })
+
+  it("handles errors with no message property", async () => {
+    mockListTemplates.mockRejectedValue({})
+    const service = createService()
+
+    await expect(service.getTemplates()).rejects.toThrow(
+      "Mailgun templates fetch failed: Unknown error"
+    )
+  })
+})
+
+describe("EU region", () => {
     it("initializes client with EU endpoint", async () => {
       mockCreate.mockResolvedValue({ id: "msg-eu" })
       const { default: Mailgun } = await import("mailgun.js")

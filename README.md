@@ -4,9 +4,16 @@
 
 Mailgun notification provider plugin for [MedusaJS](https://medusajs.com/) v2.
 
-Sends transactional emails via the Mailgun HTTP API. Supports stored templates (with localization), inline HTML/text, file attachments, and includes an Admin UI page for sending test emails.
+Sends transactional emails via the Mailgun HTTP API. Supports stored templates (with localization), inline HTML/text, file attachments, and includes an Admin UI page for sending test emails and verifying event coverage.
 
 **Requires MedusaJS v2.3.0 or later.**
+
+## What this plugin provides
+
+- **Notification provider** — registers `mailgun` as a notification provider for the `email` channel. Called automatically by Medusa when you use `createNotifications()` in a subscriber.
+- **Admin API: send test email** — `POST /admin/mailgun/send-email`. Sends a test email to a registered admin user.
+- **Admin API: event checklist** — `GET /admin/mailgun/checklist`. Scans your subscribers and Mailgun account to report coverage status for each tracked event.
+- **Admin UI** — a "Mailgun" page in the Medusa admin sidebar with two tabs: "Send Test" and "Event Checklist".
 
 ## Prerequisites
 
@@ -48,7 +55,7 @@ module.exports = defineConfig({
               api_key: process.env.MAILGUN_API_KEY,
               domain: process.env.MAILGUN_DOMAIN,
               from: process.env.MAILGUN_FROM,  // optional
-              region: "us",                     // optional
+              region: "us",                     // optional, "us" | "eu"
             },
           },
         ],
@@ -67,24 +74,32 @@ module.exports = defineConfig({
 | `from`    | No       | `noreply@<domain>`   | Default sender address used when `from` is not passed per-notification |
 | `region`  | No       | `"us"`               | Mailgun API region: `"us"` or `"eu"`                  |
 
-Set environment variables in your `.env` file:
+## Environment variables
+
+| Variable          | Required | Description                                                              |
+|-------------------|----------|--------------------------------------------------------------------------|
+| `MAILGUN_API_KEY` | Yes      | Your Mailgun API key                                                     |
+| `MAILGUN_DOMAIN`  | Yes      | Your verified Mailgun sending domain                                     |
+| `MAILGUN_FROM`    | No       | Default sender address                                                   |
+| `MAILGUN_REGION`  | No       | Set to `"eu"` to use the EU API endpoint. Omit for US.                   |
+
+Set these in your `.env` file:
 
 ```bash
 MAILGUN_API_KEY=key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 MAILGUN_DOMAIN=mg.yourdomain.com
 MAILGUN_FROM=no-reply@yourdomain.com
+# MAILGUN_REGION=eu  # uncomment if your account is on the EU region
 ```
 
-## Usage
+Reference these in `medusa-config.ts` via `process.env` — the checklist endpoint reads credentials from the same plugin options object, not from the environment directly.
 
-The provider integrates with Medusa's built-in notification system. Medusa dispatches notifications automatically on commerce events (order placed, shipment created, etc.) when you subscribe to them. You can also send manually.
+## Sending notifications
 
-### Sending a notification manually
-
-Use `notificationService.createNotifications()` from within a workflow, subscriber, or API route:
+The provider integrates with Medusa's built-in notification system. Call `createNotifications()` from a subscriber or workflow:
 
 ```ts
-const notificationService = container.resolve("notification")
+const notificationService = container.resolve(Modules.NOTIFICATION)
 
 await notificationService.createNotifications({
   to: "customer@example.com",
@@ -100,7 +115,7 @@ await notificationService.createNotifications({
 
 ### The `data` payload
 
-The `data` object serves two purposes: it controls how the email is built, and it carries template variables.
+The `data` object controls how the email is built and carries template variables. All values must be strings.
 
 | Field     | Type     | Description                                                                 |
 |-----------|----------|-----------------------------------------------------------------------------|
@@ -114,7 +129,7 @@ The `data` object serves two purposes: it controls how the email is built, and i
 
 The provider selects the message body using this priority order:
 
-1. `template` — a Mailgun stored template; all `data` fields are passed as `X-Mailgun-Variables`.
+1. `template` — a Mailgun stored template; all `data` fields are passed as `h:X-Mailgun-Variables`.
 2. `data.html` — raw HTML body (no template).
 3. `data.text` — plain-text body.
 4. Fallback — the entire `data` object is JSON-stringified and sent as plain text.
@@ -133,7 +148,7 @@ await notificationService.createNotifications({
 })
 ```
 
-Template variables are forwarded to Mailgun via the `X-Mailgun-Variables` header, where they are available inside the template using Mailgun's Handlebars syntax.
+Template variables are forwarded to Mailgun via `h:X-Mailgun-Variables` and available as `{{variable_name}}` inside Mailgun's Handlebars templates.
 
 ### Localized template
 
@@ -152,7 +167,7 @@ await notificationService.createNotifications({
 })
 ```
 
-When `locale` is present, the plugin sets Mailgun's `t:version` parameter to select that template version. If `locale` is omitted, Mailgun uses the template's default version.
+When `locale` is present, the plugin sets Mailgun's `t:version` parameter. If omitted, Mailgun uses the template's default version.
 
 ### Inline HTML
 
@@ -182,7 +197,7 @@ await notificationService.createNotifications({
 
 ### Attachments
 
-Pass base64-encoded file content in the `attachments` field (non-standard extension on the notification DTO):
+Pass base64-encoded file content in the `attachments` field:
 
 ```ts
 await notificationService.createNotifications({
@@ -259,69 +274,102 @@ export default async function orderPlacedHandler({
 export const config: SubscriberConfig = { event: "order.placed" }
 ```
 
-All fields in `data` are forwarded to Mailgun as `X-Mailgun-Variables` and available as `{{variable_name}}` inside your template.
-
-### Recommended templates for a standard storefront
-
-The minimum set to have in place before going live:
-
-| Priority | Event | Template name | Why |
-|---|---|---|---|
-| 1 | `order.placed` | `order-confirmation` | Customers expect this immediately |
-| 2 | `auth.password_reset` | `password-reset` | Blocks account access without it |
-| 3 | `shipment.created` | `shipment-notification` | Reduces "where's my order" tickets |
-| 4 | `invite.created` + `invite.resent` | `admin-invite` | Required to onboard team members |
-
-Additional events worth handling later: `order.canceled`, `order.fulfillment_created`, `delivery.created`, `order.return_requested`, `order.return_received`, `customer.created`.
+All fields in `data` are forwarded to Mailgun as `h:X-Mailgun-Variables` and available as `{{variable_name}}` inside your template.
 
 See [`docs/medusa-notification-events.md`](docs/medusa-notification-events.md) for the full event reference, subscriber patterns for each event, and suggested template variables.
 
 ## Admin UI
 
-The plugin ships an admin extension that adds a **Mailgun Test** page to your Medusa Admin dashboard.
+The plugin adds a **Mailgun** page to the Medusa admin sidebar (envelope icon). The route is `/mailgun`.
 
-### Accessing the page
+The page has two tabs:
 
-Navigate to your Medusa Admin and select **Mailgun Test** from the sidebar (envelope icon). The route is available at `/app/mailgun-test`.
+- **Send Test** — form to send a test email to a registered admin user. Fields: recipient (dropdown of admin users), subject, optional message body, optional template name, optional from-address override, and optional key-value template variables.
+- **Event Checklist** — runs `GET /admin/mailgun/checklist` and displays per-event status as a table. Shows whether each tracked event has a subscriber, whether the subscriber references the expected template name, and whether that template exists in Mailgun.
 
-### What it does
-
-The page lets you send a test email directly from the dashboard without writing code. You can:
-
-- Set the recipient address and subject.
-- Optionally specify a Mailgun template name to test a stored template.
-- Optionally override the sender address for this send.
-- Add key-value template variables that are forwarded to Mailgun.
-
-If no template is specified and no variables produce an HTML or text body, the plugin sends a plain-text fallback: `Test email — subject: <subject>`.
-
-The form posts to the authenticated API endpoint `POST /admin/mailgun/test`, which routes through Medusa's notification service using `provider_id: "mailgun"`.
-
-### Test endpoint
-
-You can also call the endpoint directly from any HTTP client authenticated as an admin:
+## Admin API: send test email
 
 ```
-POST /admin/mailgun/test
+POST /admin/mailgun/send-email
 Authorization: Bearer <admin-jwt>
 Content-Type: application/json
-
-{
-  "to": "recipient@example.com",
-  "subject": "Hello from Mailgun",
-  "template": "welcome",           // optional
-  "from": "sender@example.com",    // optional
-  "data": {                        // optional — string values only
-    "customer_name": "Alice"
-  }
-}
 ```
 
-Response on success:
+Sends a test email through the Mailgun notification provider.
+
+### Request body
+
+| Field      | Type                      | Required | Description                                                    |
+|------------|---------------------------|----------|----------------------------------------------------------------|
+| `to`       | `string` (email)          | Yes      | Recipient address. Must be a registered admin user email.      |
+| `subject`  | `string`                  | Yes      | Email subject line.                                            |
+| `template` | `string`                  | No       | Mailgun template name. If omitted, `data.text` or `data.html` is used for the body. |
+| `from`     | `string` (email)          | No       | Sender address override. Defaults to the plugin's configured `from`. |
+| `data`     | `Record<string, string>`  | No       | Template variables or body content (`html`, `text`). All values must be strings. |
+
+**Constraint**: `to` must be the email address of a registered Medusa admin user. The endpoint looks up the address in the user service before sending. Arbitrary addresses are rejected.
+
+If no template is specified and `data` contains neither `html` nor `text`, the plugin sends a plain-text fallback: `Test email — subject: <subject>`.
+
+### Response
 
 ```json
 { "success": true, "notification_id": "noti_01..." }
 ```
+
+### Example
+
+```bash
+curl -X POST https://yourstore.com/admin/mailgun/send-email \
+  -H "Authorization: Bearer <admin-jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "admin@yourstore.com",
+    "subject": "Hello from Mailgun",
+    "template": "welcome",
+    "data": { "customer_name": "Alice" }
+  }'
+```
+
+## Admin API: event checklist
+
+```
+GET /admin/mailgun/checklist
+Authorization: Bearer <admin-jwt>
+```
+
+Returns a diagnostic report for all tracked Medusa events. For each event, the endpoint checks:
+
+1. Whether a subscriber file exists in `src/subscribers/` that references the event name.
+2. Whether that subscriber file also contains the expected Mailgun template name as a string literal.
+3. Whether that template exists in your Mailgun account (requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` in the environment).
+
+Per-event status values:
+
+| Status   | Meaning                                                                         |
+|----------|---------------------------------------------------------------------------------|
+| `pass`   | Subscriber found, references the expected template, and that template exists in Mailgun. |
+| `warn`   | Subscriber correctly references the template, but the template does not exist in Mailgun yet. |
+| `inline` | Subscriber found, but the expected template name is not in the file. The subscriber may be using inline HTML or plain text. |
+| `fail`   | No subscriber found for this event.                                             |
+
+The top-level `status` rolls up the worst result across all events, excluding `inline`. `inline` events do not cause a `warn` or `fail` rollup.
+
+### CI usage
+
+```bash
+# Fail if any event is missing a subscriber or Mailgun template
+curl -sf -H "Authorization: Bearer $MEDUSA_ADMIN_TOKEN" \
+  "$MEDUSA_BACKEND_URL/admin/mailgun/checklist" \
+  | jq -e '.status == "pass"'
+
+# Fail only if a subscriber is missing; allow missing templates
+curl -sf -H "Authorization: Bearer $MEDUSA_ADMIN_TOKEN" \
+  "$MEDUSA_BACKEND_URL/admin/mailgun/checklist" \
+  | jq -e '.status != "fail"'
+```
+
+See [`docs/checklist-endpoint.md`](docs/checklist-endpoint.md) for the full response shape, field descriptions, and additional CI patterns.
 
 ## Development
 
@@ -367,7 +415,7 @@ npm test
 Coverage includes:
 
 - `validateOptions` — rejects missing `api_key` or `domain`
-- Template path — `X-Mailgun-Variables` header, `t:version` locale selection
+- Template path — `h:X-Mailgun-Variables` header, `t:version` locale selection
 - Inline HTML and plain-text paths
 - Fallback path — JSON-stringified `data`
 - Sender resolution — configured address vs. `noreply@<domain>` default

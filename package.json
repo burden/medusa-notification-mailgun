@@ -21,7 +21,7 @@
       "require": "./.medusa/server/src/admin/index.js",
       "default": "./.medusa/server/src/admin/index.js"
     },
-    "./*": "./.medusa/server/*.js"
+    "./*": "./.medusa/server/src/*.js"
   },
   "files": [
     ".medusa",

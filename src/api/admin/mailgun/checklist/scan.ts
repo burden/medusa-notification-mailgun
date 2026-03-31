@@ -1,0 +1,76 @@
+import * as fs from "fs"
+import * as path from "path"
+
+export type EventCheckConfig = {
+  event: string
+  expected_template: string
+}
+
+export const EVENT_MAP: EventCheckConfig[] = [
+  { event: "order.placed",               expected_template: "order-confirmation"    },
+  { event: "order.canceled",             expected_template: "order-canceled"        },
+  { event: "order.fulfillment_created",  expected_template: "order-shipped"         },
+  { event: "shipment.created",           expected_template: "shipment-notification" },
+  { event: "delivery.created",           expected_template: "order-delivered"       },
+  { event: "order.return_requested",     expected_template: "return-confirmed"      },
+  { event: "order.return_received",      expected_template: "return-received"       },
+  { event: "order.exchange_created",     expected_template: "exchange-created"      },
+  { event: "auth.password_reset",        expected_template: "password-reset"        },
+  { event: "customer.created",           expected_template: "welcome"               },
+  { event: "invite.created",             expected_template: "admin-invite"          },
+  { event: "invite.resent",              expected_template: "admin-invite"          },
+]
+
+export type SubscriberScanResult = {
+  event: string
+  expected_template: string
+  subscriber_file: string | null
+  subscriber_found: boolean
+  template_name_in_subscriber: boolean
+}
+
+export function scanSubscribers(cwd: string, eventMap: EventCheckConfig[]): SubscriberScanResult[] {
+  const subscribersDir = path.join(cwd, "src", "subscribers")
+
+  if (!fs.existsSync(subscribersDir)) {
+    return eventMap.map((cfg) => ({
+      event: cfg.event,
+      expected_template: cfg.expected_template,
+      subscriber_file: null,
+      subscriber_found: false,
+      template_name_in_subscriber: false,
+    }))
+  }
+
+  const files = fs.readdirSync(subscribersDir).filter((f) => f.endsWith(".ts"))
+
+  const fileContents: Array<{ relPath: string; content: string }> = files.map((f) => ({
+    relPath: path.relative(cwd, path.join(subscribersDir, f)),
+    content: fs.readFileSync(path.join(subscribersDir, f), "utf-8"),
+  }))
+
+  return eventMap.map((cfg) => {
+    const eventPattern = new RegExp(`["']${cfg.event.replace(/\./g, "\\.")}["']`)
+    const templatePattern = new RegExp(`["']${cfg.expected_template}["']`)
+
+    const match = fileContents.find((fc) => eventPattern.test(fc.content))
+
+    if (!match) {
+      return {
+        event: cfg.event,
+        expected_template: cfg.expected_template,
+        subscriber_file: null,
+        subscriber_found: false,
+        template_name_in_subscriber: false,
+      }
+    }
+
+    return {
+      event: cfg.event,
+      expected_template: cfg.expected_template,
+      subscriber_file: match.relPath,
+      subscriber_found: true,
+      template_name_in_subscriber: templatePattern.test(match.content),
+    }
+  })
+}
