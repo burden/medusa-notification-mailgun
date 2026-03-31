@@ -255,6 +255,8 @@ The page has two tabs:
 - **Send Test** — form to send a test email to a registered admin user. Fields: recipient (dropdown of admin users), subject, optional message body, optional template name, optional from-address override, and optional key-value template variables.
 - **Event Checklist** — runs `GET /admin/mailgun/checklist` and displays per-event status as a table. Shows whether each tracked event has a subscriber, what template name was detected in the subscriber, and whether that template exists in Mailgun.
 
+![Admin UI with the Event Checklist tab selected, displaying various indicators](docs/event_checklist_example.png)
+
 ## Admin API: send test email
 
 ```
