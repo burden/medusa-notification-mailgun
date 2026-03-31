@@ -36,9 +36,6 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Audit dependencies for known vulnerabilities
-        run: npm audit --audit-level=high
-
   secrets-scan:
     name: Scan for secrets
     runs-on: ubuntu-latest

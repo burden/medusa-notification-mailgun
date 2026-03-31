@@ -224,6 +224,38 @@ describe("send", () => {
     })
   })
 
+  describe("reply-to", () => {
+    it("sets h:Reply-To when data.replyTo is provided", async () => {
+      mockCreate.mockResolvedValue({ id: "msg-rt-1" })
+      const service = createService()
+
+      await service.send({
+        to: "user@example.com",
+        channel: "email",
+        data: { subject: "Test", text: "hi", replyTo: "support@example.com" },
+      } as any)
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        "mail.example.com",
+        expect.objectContaining({ "h:Reply-To": "support@example.com" })
+      )
+    })
+
+    it("omits h:Reply-To when data.replyTo is not provided", async () => {
+      mockCreate.mockResolvedValue({ id: "msg-rt-2" })
+      const service = createService()
+
+      await service.send({
+        to: "user@example.com",
+        channel: "email",
+        data: { subject: "Test", text: "hi" },
+      } as any)
+
+      const payload = mockCreate.mock.calls[0][1]
+      expect(payload["h:Reply-To"]).toBeUndefined()
+    })
+  })
+
   describe("sender", () => {
     it("uses configured from address", async () => {
       mockCreate.mockResolvedValue({ id: "msg-7" })

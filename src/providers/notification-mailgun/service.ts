@@ -91,6 +91,11 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
       subject: (data?.subject as string) || "Notification",
     }
 
+    const replyTo = (data?.replyTo as string)?.trim()
+    if (replyTo) {
+      messagePayload["h:Reply-To"] = replyTo
+    }
+
     if (template && template !== "__inline__") {
       messagePayload.template = template
       // NOTE: data?.html is passed as a template variable, not rendered directly. If callers
