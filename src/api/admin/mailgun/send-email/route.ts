@@ -11,6 +11,12 @@ export const POST = async (
 ) => {
   const { to, subject, template, from, data } = req.validatedBody
 
+  // SECURITY NOTE (Finding #7 — User Enumeration):
+  // This endpoint is admin-only (requires authentication). The error below confirms whether
+  // an email address belongs to a registered admin. We accept this enumeration risk because:
+  //   1. The endpoint requires a valid admin session — unauthenticated callers cannot reach it.
+  //   2. The actionable error message is operationally valuable for admins debugging send failures.
+  // If this endpoint is ever exposed more broadly, replace the error with a silent no-op.
   const userService = req.scope.resolve(Modules.USER) as any
   const matchingUsers = await userService.listUsers({ email: [to] })
   if (!matchingUsers || matchingUsers.length === 0) {

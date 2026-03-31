@@ -6,6 +6,7 @@ jest.mock("fs")
 const mockExistsSync = fs.existsSync as jest.Mock
 const mockReaddirSync = fs.readdirSync as jest.Mock
 const mockReadFileSync = fs.readFileSync as jest.Mock
+const mockRealpathSync = fs.realpathSync as unknown as jest.Mock
 
 const eventMap: EventCheckConfig[] = [
   { event: "order.placed", expected_template: "order-confirmation" },
@@ -16,6 +17,9 @@ beforeEach(() => {
   mockExistsSync.mockReset()
   mockReaddirSync.mockReset()
   mockReadFileSync.mockReset()
+  mockRealpathSync.mockReset()
+  // Default: realpathSync returns input unchanged (no symlinks)
+  mockRealpathSync.mockImplementation((p: string) => p)
 })
 
 describe("scanSubscribers", () => {
@@ -105,6 +109,37 @@ describe("scanSubscribers", () => {
     expect(() => scanSubscribers("/fake/cwd", eventMap)).not.toThrow()
     const tsCallPaths = mockReadFileSync.mock.calls.map((c) => c[0] as string)
     expect(tsCallPaths.every((p) => p.endsWith(".ts"))).toBe(true)
+  })
+
+  it("throws when subscribersDir resolves outside cwd (symlink escape)", () => {
+    mockExistsSync.mockReturnValue(true)
+    // Simulate a symlink that points outside the project root
+    mockRealpathSync.mockImplementation((p: string) => {
+      if (p.includes("subscribers")) return "/tmp/attacker-controlled"
+      return "/fake/cwd"
+    })
+
+    expect(() => scanSubscribers("/fake/cwd", eventMap)).toThrow(
+      "Subscribers directory is outside the project root"
+    )
+    expect(mockReaddirSync).not.toHaveBeenCalled()
+  })
+
+  it("skips files whose resolved paths escape subscribersDir (symlink per-file attack)", () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReaddirSync.mockReturnValue(["escape.ts"])
+    // subscribersDir resolves normally, but the individual file symlinks outside
+    mockRealpathSync.mockImplementation((p: string) => {
+      if (p.endsWith("escape.ts")) return "/etc/passwd"
+      return p
+    })
+
+    // Should not throw; the file is silently skipped
+    const results = scanSubscribers("/fake/cwd", eventMap)
+    expect(mockReadFileSync).not.toHaveBeenCalled()
+    for (const r of results) {
+      expect(r.subscriber_found).toBe(false)
+    }
   })
 
   it("maps each event to its correct file when subscribers are spread across multiple files", () => {

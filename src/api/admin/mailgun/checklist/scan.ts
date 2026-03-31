@@ -42,12 +42,27 @@ export function scanSubscribers(cwd: string, eventMap: EventCheckConfig[]): Subs
     }))
   }
 
-  const files = fs.readdirSync(subscribersDir).filter((f) => f.endsWith(".ts"))
+  // Resolve real paths and assert subscribersDir is still under cwd (path traversal guard)
+  const realCwd = fs.realpathSync(cwd)
+  const realSubscribersDir = fs.realpathSync(subscribersDir)
+  if (!realSubscribersDir.startsWith(realCwd + path.sep) && realSubscribersDir !== realCwd) {
+    throw new Error("Subscribers directory is outside the project root")
+  }
 
-  const fileContents: Array<{ relPath: string; content: string }> = files.map((f) => ({
-    relPath: path.relative(cwd, path.join(subscribersDir, f)),
-    content: fs.readFileSync(path.join(subscribersDir, f), "utf-8"),
-  }))
+  const files = fs.readdirSync(realSubscribersDir).filter((f) => f.endsWith(".ts"))
+
+  const fileContents: Array<{ relPath: string; content: string }> = files.flatMap((f) => {
+    const filePath = path.join(realSubscribersDir, f)
+    // Assert each resolved file path stays inside subscribersDir before reading
+    const realFilePath = fs.realpathSync(filePath)
+    if (!realFilePath.startsWith(realSubscribersDir + path.sep)) {
+      return []
+    }
+    return [{
+      relPath: path.relative(cwd, filePath),
+      content: fs.readFileSync(filePath, "utf-8"),
+    }]
+  })
 
   return eventMap.map((cfg) => {
     const eventPattern = new RegExp(`["']${cfg.event.replace(/\./g, "\\.")}["']`)

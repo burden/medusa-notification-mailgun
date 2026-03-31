@@ -31,6 +31,13 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
         "MAILGUN_DOMAIN is required"
       )
     }
+    // SSRF guard: region must be one of the two known Mailgun API hosts
+    if (options.region !== undefined && !["us", "eu"].includes(options.region as string)) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "MAILGUN_REGION must be 'us' or 'eu'"
+      )
+    }
   }
 
   private client_: any
@@ -86,11 +93,25 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
 
     if (template && template !== "__inline__") {
       messagePayload.template = template
-      messagePayload["h:X-Mailgun-Variables"] = JSON.stringify(data || {})
+      // NOTE: data?.html is passed as a template variable, not rendered directly. If callers
+      // supply untrusted HTML in data, Mailgun's template engine may render it — callers are
+      // responsible for sanitizing HTML content before passing it here.
+      const serializedData = JSON.stringify(data || {})
+      // Cap h:X-Mailgun-Variables at 32 KB to prevent payload abuse
+      const DATA_MAX_BYTES = 32 * 1024
+      if (Buffer.byteLength(serializedData, "utf8") > DATA_MAX_BYTES) {
+        throw new MedusaError(
+          MedusaError.Types.INVALID_DATA,
+          "Notification data object exceeds the 32 KB size limit"
+        )
+      }
+      messagePayload["h:X-Mailgun-Variables"] = serializedData
       if (data?.locale) {
         messagePayload["t:version"] = data.locale as string
       }
     } else if (data?.html) {
+      // NOTE: data.html is passed directly to Mailgun without sanitization.
+      // Callers must ensure this value does not contain untrusted HTML.
       messagePayload.html = data.html as string
     } else if (data?.text) {
       messagePayload.text = data.text as string
@@ -100,11 +121,26 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
 
     const attachments = (notification as any).attachments
     if (attachments?.length) {
+      // Validate each attachment filename and size before passing to Mailgun
+      const SAFE_FILENAME = /^[\w\-. ]+$/
+      const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024 // 25 MB per Mailgun's limit
       messagePayload.attachment = attachments.map(
-        (att: { content: string; filename: string }) => ({
-          data: Buffer.from(att.content, "base64"),
-          filename: att.filename,
-        })
+        (att: { content: string; filename: string }) => {
+          if (!SAFE_FILENAME.test(att.filename)) {
+            throw new MedusaError(
+              MedusaError.Types.INVALID_DATA,
+              `Attachment filename contains invalid characters: ${att.filename}`
+            )
+          }
+          const buf = Buffer.from(att.content, "base64")
+          if (buf.byteLength > MAX_ATTACHMENT_BYTES) {
+            throw new MedusaError(
+              MedusaError.Types.INVALID_DATA,
+              `Attachment "${att.filename}" exceeds the 25 MB size limit`
+            )
+          }
+          return { data: buf, filename: att.filename }
+        }
       )
     }
 
@@ -117,11 +153,16 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
 
       return { id: result.id || result.message }
     } catch (error: any) {
-      const message =
-        error?.details || error?.message || "Unknown Mailgun error"
+      // Re-throw validation errors (INVALID_DATA) as-is — they are safe to surface
+      if (error instanceof MedusaError && error.type === MedusaError.Types.INVALID_DATA) {
+        throw error
+      }
+      // Log the full Mailgun error server-side; return only a generic message to callers
+      const corrId = Math.random().toString(36).slice(2, 10)
+      console.error(`[mailgun-service][${corrId}] send() failed:`, error)
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
-        `Mailgun send failed: ${message}`
+        `Mailgun send failed (ref: ${corrId})`
       )
     }
   }
@@ -132,10 +173,12 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
       const result = await client.domains.domainTemplates.list(this.domain_)
       return (result?.items ?? []).map((t: { name: string }) => t.name)
     } catch (error: any) {
-      const message = error?.message || "Unknown error"
+      // Log the full Mailgun error server-side; return only a generic message to callers
+      const corrId = Math.random().toString(36).slice(2, 10)
+      console.error(`[mailgun-service][${corrId}] getTemplates() failed:`, error)
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
-        `Mailgun templates fetch failed: ${message}`
+        `Mailgun templates fetch failed (ref: ${corrId})`
       )
     }
   }

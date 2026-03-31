@@ -54,6 +54,45 @@ describe("validateOptions", () => {
       })
     ).not.toThrow()
   })
+
+  it("throws when region is not in the allowlist", () => {
+    expect(() =>
+      MailgunNotificationProviderService.validateOptions({
+        api_key: "x",
+        domain: "y",
+        region: "cn",
+      })
+    ).toThrow("MAILGUN_REGION must be 'us' or 'eu'")
+  })
+
+  it("passes when region is 'us'", () => {
+    expect(() =>
+      MailgunNotificationProviderService.validateOptions({
+        api_key: "x",
+        domain: "y",
+        region: "us",
+      })
+    ).not.toThrow()
+  })
+
+  it("passes when region is 'eu'", () => {
+    expect(() =>
+      MailgunNotificationProviderService.validateOptions({
+        api_key: "x",
+        domain: "y",
+        region: "eu",
+      })
+    ).not.toThrow()
+  })
+
+  it("passes when region is omitted", () => {
+    expect(() =>
+      MailgunNotificationProviderService.validateOptions({
+        api_key: "x",
+        domain: "y",
+      })
+    ).not.toThrow()
+  })
 })
 
 describe("send", () => {
@@ -274,46 +313,148 @@ describe("send", () => {
       expect(payload.attachment[0].filename).toBe("hello.txt")
       expect(payload.attachment[0].data).toEqual(Buffer.from("hello"))
     })
+
+    it("rejects filenames with path traversal characters", async () => {
+      const service = createService()
+      const content = Buffer.from("data").toString("base64")
+
+      await expect(
+        service.send({
+          to: "user@example.com",
+          channel: "email",
+          data: { subject: "Test", text: "hi" },
+          attachments: [{ content, filename: "../../etc/passwd" }],
+        } as any)
+      ).rejects.toThrow("invalid characters")
+    })
+
+    it("rejects filenames with null bytes", async () => {
+      const service = createService()
+      const content = Buffer.from("data").toString("base64")
+
+      await expect(
+        service.send({
+          to: "user@example.com",
+          channel: "email",
+          data: { subject: "Test", text: "hi" },
+          attachments: [{ content, filename: "file\x00.txt" }],
+        } as any)
+      ).rejects.toThrow("invalid characters")
+    })
+
+    it("rejects attachments exceeding 25 MB", async () => {
+      const service = createService()
+      // Create a buffer slightly over 25 MB and base64-encode it
+      const bigBuf = Buffer.alloc(25 * 1024 * 1024 + 1)
+      const content = bigBuf.toString("base64")
+
+      await expect(
+        service.send({
+          to: "user@example.com",
+          channel: "email",
+          data: { subject: "Test", text: "hi" },
+          attachments: [{ content, filename: "big.bin" }],
+        } as any)
+      ).rejects.toThrow("exceeds the 25 MB size limit")
+    })
+
+    it("accepts attachments exactly at the 25 MB limit", async () => {
+      mockCreate.mockResolvedValue({ id: "msg-attach-ok" })
+      const service = createService()
+      const exactBuf = Buffer.alloc(25 * 1024 * 1024)
+      const content = exactBuf.toString("base64")
+
+      await expect(
+        service.send({
+          to: "user@example.com",
+          channel: "email",
+          data: { subject: "Test", text: "hi" },
+          attachments: [{ content, filename: "exact.bin" }],
+        } as any)
+      ).resolves.toBeDefined()
+    })
   })
 
   describe("error handling", () => {
-    it("wraps Mailgun errors in MedusaError", async () => {
-      mockCreate.mockRejectedValue(new Error("API rate limited"))
+    it("does not leak internal error details in the thrown message", async () => {
+      mockCreate.mockRejectedValue(new Error("domain mail.secret-internal.com is suspended"))
       const service = createService()
 
-      await expect(
-        service.send({
-          to: "user@example.com",
-          channel: "email",
-          data: { subject: "Test", text: "hi" },
-        } as any)
-      ).rejects.toThrow("Mailgun send failed: API rate limited")
+      const thrown = await service.send({
+        to: "user@example.com",
+        channel: "email",
+        data: { subject: "Test", text: "hi" },
+      } as any).catch((e) => e)
+
+      expect(thrown).toBeInstanceOf(MedusaError)
+      // The raw internal error detail must not appear in the client-facing message
+      expect(thrown.message).not.toContain("secret-internal.com")
+      expect(thrown.message).not.toContain("suspended")
+      // Must include a correlation reference for support lookup
+      expect(thrown.message).toMatch(/ref: [a-z0-9]+/)
     })
 
-    it("handles errors with details property", async () => {
-      mockCreate.mockRejectedValue({ details: "Invalid domain" })
+    it("re-throws INVALID_DATA errors without wrapping (safe validation errors)", async () => {
       const service = createService()
 
+      // Trigger a known INVALID_DATA path (data size limit)
+      const bigData = { subject: "x", payload: "x".repeat(33 * 1024) }
       await expect(
         service.send({
           to: "user@example.com",
           channel: "email",
-          data: { subject: "Test", text: "hi" },
+          template: "welcome",
+          data: bigData,
         } as any)
-      ).rejects.toThrow("Mailgun send failed: Invalid domain")
+      ).rejects.toThrow("exceeds the 32 KB size limit")
     })
 
     it("handles unknown errors", async () => {
       mockCreate.mockRejectedValue({})
       const service = createService()
 
+      const thrown = await service.send({
+        to: "user@example.com",
+        channel: "email",
+        data: { subject: "Test", text: "hi" },
+      } as any).catch((e) => e)
+
+      expect(thrown).toBeInstanceOf(MedusaError)
+      expect(thrown.message).toMatch(/Mailgun send failed \(ref: [a-z0-9]+\)/)
+    })
+  })
+
+  describe("data size limit", () => {
+    it("throws when serialized data exceeds 32 KB", async () => {
+      const service = createService()
+      const bigData = { subject: "x", payload: "x".repeat(33 * 1024) }
+
       await expect(
         service.send({
           to: "user@example.com",
           channel: "email",
-          data: { subject: "Test", text: "hi" },
+          template: "welcome",
+          data: bigData,
         } as any)
-      ).rejects.toThrow("Mailgun send failed: Unknown Mailgun error")
+      ).rejects.toThrow("exceeds the 32 KB size limit")
+    })
+
+    it("does not throw when serialized data is just under the limit", async () => {
+      mockCreate.mockResolvedValue({ id: "msg-size-ok" })
+      const service = createService()
+      // Build a data object whose JSON serialization stays under 32 KB.
+      // JSON.stringify({ subject: "x", p: "<padding>" }) adds ~18 bytes of overhead.
+      const padding = "x".repeat(32 * 1024 - 30)
+      const data = { subject: "x", p: padding }
+
+      await expect(
+        service.send({
+          to: "user@example.com",
+          channel: "email",
+          template: "welcome",
+          data,
+        } as any)
+      ).resolves.toBeDefined()
     })
   })
 
@@ -376,22 +517,24 @@ describe("send", () => {
     expect(result).toEqual([])
   })
 
-  it("wraps API errors in MedusaError", async () => {
-    mockListTemplates.mockRejectedValue(new Error("Unauthorized"))
+  it("wraps API errors in MedusaError with sanitized message", async () => {
+    mockListTemplates.mockRejectedValue(new Error("Unauthorized: key=secret-key-abc"))
     const service = createService()
 
-    await expect(service.getTemplates()).rejects.toThrow(
-      "Mailgun templates fetch failed: Unauthorized"
-    )
+    const thrown = await service.getTemplates().catch((e) => e)
+    expect(thrown).toBeInstanceOf(MedusaError)
+    // Must not leak internal detail
+    expect(thrown.message).not.toContain("secret-key-abc")
+    expect(thrown.message).toMatch(/ref: [a-z0-9]+/)
   })
 
-  it("handles errors with no message property", async () => {
+  it("handles errors with no message property and returns sanitized message", async () => {
     mockListTemplates.mockRejectedValue({})
     const service = createService()
 
-    await expect(service.getTemplates()).rejects.toThrow(
-      "Mailgun templates fetch failed: Unknown error"
-    )
+    const thrown = await service.getTemplates().catch((e) => e)
+    expect(thrown).toBeInstanceOf(MedusaError)
+    expect(thrown.message).toMatch(/Mailgun templates fetch failed \(ref: [a-z0-9]+\)/)
   })
 })
 

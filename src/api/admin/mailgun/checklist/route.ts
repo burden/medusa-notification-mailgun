@@ -42,7 +42,10 @@ export const GET = async (
       templateSet = new Set((result?.items ?? []).map((t: any) => t.name))
       mailgunTemplatesReachable = true
     } catch (err: any) {
-      mailgunErrorMessage = err?.message || "Failed to fetch Mailgun templates"
+      // Log full error server-side; return only a generic message to clients
+      const corrId = Math.random().toString(36).slice(2, 10)
+      console.error(`[mailgun-checklist][${corrId}] Failed to fetch templates:`, err)
+      mailgunErrorMessage = `Failed to fetch Mailgun templates (ref: ${corrId})`
       mailgunTemplatesReachable = false
     }
   }
@@ -114,7 +117,7 @@ export const GET = async (
   res.status(200).json({
     status: topStatus,
     checked_at: new Date().toISOString(),
-    subscriber_root: subscriberRoot,
+    // subscriber_root intentionally omitted — absolute filesystem paths must not be leaked to clients
     subscriber_root_found: subscriberRootFound,
     mailgun_templates_reachable: mailgunTemplatesReachable,
     ...(mailgunErrorMessage ? { mailgun_error: mailgunErrorMessage } : {}),
