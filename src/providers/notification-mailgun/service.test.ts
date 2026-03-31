@@ -241,6 +241,22 @@ describe("send", () => {
       )
     })
 
+    it("uses data.from when provided (overrides configured from)", async () => {
+      mockCreate.mockResolvedValue({ id: "msg-8b" })
+      const service = createService()
+
+      await service.send({
+        to: "user@example.com",
+        channel: "email",
+        data: { subject: "Test", text: "hi", from: "store@mystore.co.uk" },
+      } as any)
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        "mail.example.com",
+        expect.objectContaining({ from: "store@mystore.co.uk" })
+      )
+    })
+
     it("defaults from to noreply@domain when not configured", async () => {
       mockCreate.mockResolvedValue({ id: "msg-8" })
       const service = createService({

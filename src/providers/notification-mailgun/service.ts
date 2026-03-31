@@ -86,7 +86,7 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
     }
 
     const messagePayload: Record<string, unknown> = {
-      from: (notification as any).from?.trim() || this.from_,
+      from: (notification as any).from?.trim() || (data?.from as string)?.trim() || this.from_,
       to: [to],
       subject: (data?.subject as string) || "Notification",
     }
