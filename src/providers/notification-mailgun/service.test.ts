@@ -392,6 +392,13 @@ describe("send", () => {
   })
 
   describe("error handling", () => {
+    beforeEach(() => {
+      jest.spyOn(console, "error").mockImplementation(() => {})
+    })
+    afterEach(() => {
+      jest.restoreAllMocks()
+    })
+
     it("does not leak internal error details in the thrown message", async () => {
       mockCreate.mockRejectedValue(new Error("domain mail.secret-internal.com is suspended"))
       const service = createService()
@@ -533,24 +540,33 @@ describe("send", () => {
     expect(result).toEqual([])
   })
 
-  it("wraps API errors in MedusaError with sanitized message", async () => {
-    mockListTemplates.mockRejectedValue(new Error("Unauthorized: key=secret-key-abc"))
-    const service = createService()
+  describe("error handling", () => {
+    beforeEach(() => {
+      jest.spyOn(console, "error").mockImplementation(() => {})
+    })
+    afterEach(() => {
+      jest.restoreAllMocks()
+    })
 
-    const thrown = await service.getTemplates().catch((e) => e)
-    expect(thrown).toBeInstanceOf(MedusaError)
-    // Must not leak internal detail
-    expect(thrown.message).not.toContain("secret-key-abc")
-    expect(thrown.message).toMatch(/ref: [a-z0-9]+/)
-  })
+    it("wraps API errors in MedusaError with sanitized message", async () => {
+      mockListTemplates.mockRejectedValue(new Error("Unauthorized: key=secret-key-abc"))
+      const service = createService()
 
-  it("handles errors with no message property and returns sanitized message", async () => {
-    mockListTemplates.mockRejectedValue({})
-    const service = createService()
+      const thrown = await service.getTemplates().catch((e) => e)
+      expect(thrown).toBeInstanceOf(MedusaError)
+      // Must not leak internal detail
+      expect(thrown.message).not.toContain("secret-key-abc")
+      expect(thrown.message).toMatch(/ref: [a-z0-9]+/)
+    })
 
-    const thrown = await service.getTemplates().catch((e) => e)
-    expect(thrown).toBeInstanceOf(MedusaError)
-    expect(thrown.message).toMatch(/Mailgun templates fetch failed \(ref: [a-z0-9]+\)/)
+    it("handles errors with no message property and returns sanitized message", async () => {
+      mockListTemplates.mockRejectedValue({})
+      const service = createService()
+
+      const thrown = await service.getTemplates().catch((e) => e)
+      expect(thrown).toBeInstanceOf(MedusaError)
+      expect(thrown.message).toMatch(/Mailgun templates fetch failed \(ref: [a-z0-9]+\)/)
+    })
   })
 })
 
