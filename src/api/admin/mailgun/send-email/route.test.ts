@@ -133,28 +133,46 @@ describe("POST /admin/mailgun/test", () => {
   })
 
   describe("error handling", () => {
-    it("wraps notification service errors in MedusaError", async () => {
+    it("wraps notification service errors in sanitized MedusaError with correlation ID", async () => {
       mockCreateNotifications.mockRejectedValue(new Error("Provider unavailable"))
       const req = makeReqWithScope({ to: "user@example.com", subject: "Hi", template: "t1" })
       const res = makeRes()
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation()
 
-      await expect(POST(req, res)).rejects.toThrow("Failed to send test email: Provider unavailable")
+      await expect(POST(req, res)).rejects.toThrow(/^Failed to send test email \(ref: [a-z0-9]+\)$/)
+      consoleSpy.mockRestore()
     })
 
     it("throws MedusaError of type UNEXPECTED_STATE", async () => {
       mockCreateNotifications.mockRejectedValue(new Error("oops"))
       const req = makeReqWithScope({ to: "user@example.com", subject: "Hi", template: "t1" })
       const res = makeRes()
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation()
 
       await expect(POST(req, res)).rejects.toBeInstanceOf(MedusaError)
+      consoleSpy.mockRestore()
+    })
+
+    it("logs the original error server-side but does not expose it to the client", async () => {
+      const originalError = new Error("Provider unavailable")
+      mockCreateNotifications.mockRejectedValue(originalError)
+      const req = makeReqWithScope({ to: "user@example.com", subject: "Hi", template: "t1" })
+      const res = makeRes()
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation()
+
+      await expect(POST(req, res)).rejects.toThrow(/Failed to send test email \(ref:/)
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("[mailgun] test send failed"), originalError)
+      consoleSpy.mockRestore()
     })
 
     it("handles errors without a message", async () => {
       mockCreateNotifications.mockRejectedValue({})
       const req = makeReqWithScope({ to: "user@example.com", subject: "Hi", template: "t1" })
       const res = makeRes()
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation()
 
-      await expect(POST(req, res)).rejects.toThrow("Failed to send test email: Unknown error")
+      await expect(POST(req, res)).rejects.toThrow(/^Failed to send test email \(ref: [a-z0-9]+\)$/)
+      consoleSpy.mockRestore()
     })
   })
 })
