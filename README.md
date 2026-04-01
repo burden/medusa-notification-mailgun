@@ -8,7 +8,7 @@ Sends transactional emails via the Mailgun HTTP API. Supports stored templates (
 
 **Requires MedusaJS v2.3.0 or later.**
 
-**In a hurry?** [Quickstart](docs/quickstart.md)! From install to first email in ~15 minutes.
+**In a hurry?** [Quickstart!](docs/quickstart.md) From install to first email in ~15 minutes.
 
 ## What this plugin provides
 
@@ -138,6 +138,8 @@ The provider selects the message body using this priority order:
 3. `data.text` — plain-text body.
 4. Fallback — the entire `data` object is JSON-stringified and sent as plain text.
 
+Use `data.html` or `data.text` when you want to generate content dynamically in code rather than maintain a template in the Mailgun dashboard.
+
 ### Stored template
 
 ```ts
@@ -230,13 +232,7 @@ await notificationService.createNotifications({
 } as any)
 ```
 
-## How the plugin makes decisions
-
-**Content selection order**: When `createNotifications()` is called, the plugin picks the message body using this priority: `template` first, then `data.html`, then `data.text`, then a JSON-stringified fallback. Mailgun stored templates are the primary use case — inline HTML and plain text exist for notifications where you want to generate content dynamically in code rather than maintain a template in the Mailgun dashboard.
-
-**Sender address resolution**: The `from` field can be set at three levels: the plugin `options` in `medusa-config.ts`, the notification-level `from` field in `createNotifications()`, and `data.from`. The notification-level `from` field always wins. `data.from` only applies when no plugin-level `from` is configured — if you have set `from` in your plugin options, `data.from` is ignored. Use the notification-level `from` (not `data.from`) for reliable per-notification overrides.
-
-**Checklist uses static analysis**: The `GET /admin/mailgun/checklist` endpoint checks your setup by reading subscriber files as text, not by running them. It looks for the string `template: "your-template-name"` as a literal in the file. This means it works without running your application and without needing live data — but it also means dynamically constructed template names (e.g. `template: getTemplateName(event)`) will appear as `inline` status rather than `pass`. See [`docs/checklist-endpoint.md`](docs/checklist-endpoint.md) for details on what the checklist does and does not verify.
+`data.from` is also accepted, but is ignored when a plugin-level `from` is set in `medusa-config.ts`. The top-level `from` field shown above is the preferred method.
 
 ## Wiring up Medusa events to templates
 
