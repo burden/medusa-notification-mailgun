@@ -30,7 +30,7 @@ interface ChecklistEvent {
   expected_template: string
   subscriber_file: string | null
   subscriber_found: boolean
-  template_name_in_subscriber: boolean
+  template_name_in_subscriber: string | null
   template_exists_in_mailgun: boolean | null
   status: "pass" | "warn" | "inline" | "fail"
   hint?: string
@@ -67,6 +67,50 @@ function absoluteTime(isoString: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// HintText
+// ---------------------------------------------------------------------------
+
+const HintText = ({ hint }: { hint: string }) => {
+  const [expanded, setExpanded] = useState(false)
+  const dotIndex = hint.indexOf(". ")
+  const hasMore = dotIndex !== -1 && dotIndex < hint.length - 2
+  const first = hasMore ? hint.slice(0, dotIndex + 1) : hint
+  const rest = hasMore ? hint.slice(dotIndex + 2) : ""
+
+  return (
+    <span className="text-ui-fg-subtle" style={{ fontSize: "0.75rem", lineHeight: "1rem" }}>
+      {first}
+      {hasMore && !expanded && (
+        <>
+          {" "}
+          <button
+            onClick={() => setExpanded(true)}
+            className="inline-flex items-center gap-x-0.5 text-ui-fg-interactive hover:underline"
+            style={{ fontSize: "inherit", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+          >
+            more ▸
+          </button>
+        </>
+      )}
+      {hasMore && expanded && (
+        <>
+          {" "}
+          {rest}
+          {" "}
+          <button
+            onClick={() => setExpanded(false)}
+            className="inline-flex items-center gap-x-0.5 text-ui-fg-interactive hover:underline"
+            style={{ fontSize: "inherit", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+          >
+            ▾ less
+          </button>
+        </>
+      )}
+    </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // SendTestTab
 // ---------------------------------------------------------------------------
 
@@ -76,6 +120,7 @@ const SendTestTab = () => {
   const [body, setBody] = useState("")
   const [template, setTemplate] = useState("")
   const [from, setFrom] = useState("")
+  const [replyTo, setReplyTo] = useState("")
   const [variables, setVariables] = useState<VariableRow[]>([])
   const [errors, setErrors] = useState<{ to?: string; subject?: string }>({})
 
@@ -97,6 +142,7 @@ const SendTestTab = () => {
       setBody("")
       setTemplate("")
       setFrom("")
+      setReplyTo("")
       setVariables([])
       setErrors({})
     },
@@ -146,6 +192,7 @@ const SendTestTab = () => {
       subject: subject.trim(),
       ...(template.trim() ? { template: template.trim() } : {}),
       ...(from.trim() ? { from: from.trim() } : {}),
+      ...(replyTo.trim() ? { reply_to: replyTo.trim() } : {}),
       ...(Object.keys(data).length ? { data } : {}),
     })
   }
@@ -264,6 +311,24 @@ const SendTestTab = () => {
           placeholder="sender@example.com"
           value={from}
           onChange={(e) => setFrom(e.target.value)}
+        />
+      </div>
+
+      {/* Reply-To override */}
+      <div className="flex flex-col gap-y-2">
+        <Label htmlFor="reply-to" size="small" weight="plus">
+          Reply-To address
+        </Label>
+        <Text size="small" className="text-ui-fg-subtle">
+          Optional. When set, replies to this email will be directed to this
+          address instead of the sender.
+        </Text>
+        <Input
+          id="reply-to"
+          type="email"
+          placeholder="replyto@example.com"
+          value={replyTo}
+          onChange={(e) => setReplyTo(e.target.value)}
         />
       </div>
 
@@ -481,9 +546,10 @@ const ChecklistTab = () => {
               {/* Event name + hint */}
               <div className="flex flex-col gap-y-1">
                 <span className="font-mono text-sm">{event.event}</span>
-                {event.hint && (
-                  <Text size="xsmall" className="text-ui-fg-subtle">{event.hint}</Text>
+                {event.template_exists_in_mailgun === true && event.template_name_in_subscriber && (
+                  <Text size="xsmall" className="text-ui-fg-subtle">Template: {event.template_name_in_subscriber}</Text>
                 )}
+                {event.hint && <HintText hint={event.hint} />}
               </div>
 
               {/* Subscriber file */}
@@ -533,7 +599,7 @@ const ChecklistTab = () => {
 // ---------------------------------------------------------------------------
 
 const MailgunPage = () => {
-  const [activeTab, setActiveTab] = useState("send-test")
+  const [activeTab, setActiveTab] = useState("checklist")
 
   return (
     <Container className="flex flex-col gap-y-0 p-0 overflow-hidden">
@@ -552,14 +618,14 @@ const MailgunPage = () => {
       <div className="px-6 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <Tabs.List>
-            <Tabs.Trigger value="send-test">Send Test</Tabs.Trigger>
             <Tabs.Trigger value="checklist">Event Checklist</Tabs.Trigger>
+            <Tabs.Trigger value="send-test">Send Test</Tabs.Trigger>
           </Tabs.List>
-          <Tabs.Content value="send-test" className="pt-6">
-            <SendTestTab />
-          </Tabs.Content>
           <Tabs.Content value="checklist" className="pt-6">
             <ChecklistTab />
+          </Tabs.Content>
+          <Tabs.Content value="send-test" className="pt-6">
+            <SendTestTab />
           </Tabs.Content>
         </Tabs>
       </div>

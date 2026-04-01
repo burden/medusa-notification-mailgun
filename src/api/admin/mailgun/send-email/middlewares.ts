@@ -7,6 +7,7 @@ export const PostAdminMailgunTestSchema = z.object({
   subject: z.string().min(1),
   template: z.string().optional(),
   from: z.string().email().optional(),
+  reply_to: z.string().email().optional(),
   data: z.record(z.string()).optional(),
 })
 

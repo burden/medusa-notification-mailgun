@@ -8,14 +8,14 @@ Sends transactional emails via the Mailgun HTTP API. Supports stored templates (
 
 **Requires MedusaJS v2.3.0 or later.**
 
-**In a hurry?** Start with the [quickstart](docs/quickstart.md) — install to first email in ~15 minutes.
+**In a hurry?** [Quickstart](docs/quickstart.md)! From install to first email in ~15 minutes.
 
 ## What this plugin provides
 
 - **Notification provider** — registers `mailgun` as a notification provider for the `email` channel. Called automatically by Medusa when you use `createNotifications()` in a subscriber.
 - **Admin API: send test email** — `POST /admin/mailgun/send-email`. Sends a test email to a registered admin user.
 - **Admin API: event checklist** — `GET /admin/mailgun/checklist`. Scans your subscribers and Mailgun account to report coverage status for each tracked event.
-- **Admin UI** — a "Mailgun" page in the Medusa admin sidebar with two tabs: "Send Test" and "Event Checklist".
+- **Admin UI** — a "Mailgun" page in the Medusa admin sidebar with two tabs: "Event Checklist" (default) and "Send Test".
 
 ## Prerequisites
 
@@ -252,10 +252,14 @@ The plugin adds a **Mailgun** page to the Medusa admin sidebar (envelope icon). 
 
 The page has two tabs:
 
-- **Send Test** — form to send a test email to a registered admin user. Fields: recipient (dropdown of admin users), subject, optional message body, optional template name, optional from-address override, and optional key-value template variables.
-- **Event Checklist** — runs `GET /admin/mailgun/checklist` and displays per-event status as a table. Shows whether each tracked event has a subscriber, what template name was detected in the subscriber, and whether that template exists in Mailgun.
+- **Event Checklist** (default) — runs `GET /admin/mailgun/checklist` and displays per-event status as a table. Shows whether each tracked event has a subscriber, what template name was detected in the subscriber, and whether that template exists in Mailgun. For events with a confirmed Mailgun template, the template name is displayed below the event name in the table row.
 
 ![Admin UI with the Event Checklist tab selected, displaying various indicators](docs/event_checklist_example.png)
+
+- **Send Test** — form to send a test email to a registered admin user. Fields: recipient (dropdown of admin users), subject, optional message body, optional template name, optional from-address override, optional reply-to address, and optional key-value template variables.
+
+![Admin UI with the Send Test tab selected](docs/send_test_example.png)
+
 
 ## Admin API: send test email
 
@@ -275,6 +279,7 @@ Sends a test email through the Mailgun notification provider.
 | `subject`  | `string`                  | Yes      | Email subject line.                                            |
 | `template` | `string`                  | No       | Mailgun template name. If omitted, `data.text` or `data.html` is used for the body. |
 | `from`     | `string` (email)          | No       | Sender address override. Defaults to the plugin's configured `from`. |
+| `reply_to` | `string` (email)          | No       | Reply-To address. When set, replies are directed to this address instead of the sender. |
 | `data`     | `Record<string, string>`  | No       | Template variables or body content (`html`, `text`). All values must be strings. |
 
 **Constraint**: `to` must be the email address of a registered Medusa admin user. The endpoint looks up the address in the user service before sending. Arbitrary addresses are rejected.

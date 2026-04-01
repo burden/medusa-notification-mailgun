@@ -9,7 +9,7 @@ export const POST = async (
   req: AuthenticatedMedusaRequest<PostBody>,
   res: MedusaResponse
 ) => {
-  const { to, subject, template, from, data } = req.validatedBody
+  const { to, subject, template, from, reply_to, data } = req.validatedBody
 
   // SECURITY NOTE (Finding #7 — User Enumeration):
   // This endpoint is admin-only (requires authentication). The error below confirms whether
@@ -39,6 +39,7 @@ export const POST = async (
         ...(!template && !data?.html && !data?.text ? { text: `Test email — subject: ${subject}` } : {}),
       },
       ...(from ? { from } : {}),
+      ...(reply_to ? { reply_to } : {}),
     })
 
     res.json({ success: true, notification_id: result?.id || result })
