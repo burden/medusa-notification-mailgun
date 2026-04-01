@@ -56,6 +56,7 @@
     "mailgun.js": "^12.1.0",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
+    "yalc": "^1.0.0-pre.53",
     "typescript": "^5.6.0"
   },
   "engines": {
