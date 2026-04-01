@@ -121,7 +121,7 @@ The `data` object controls how the email is built and carries template variables
 
 | Field     | Type     | Description                                                                 |
 |-----------|----------|-----------------------------------------------------------------------------|
-| `subject` | `string` | Email subject line. Defaults to `"Notification"` if omitted.                |
+| `subject` | `string` | Email subject line. Optional — if omitted, Mailgun uses the subject defined in the stored template. Required when not using a stored template. |
 | `locale`  | `string` | Selects a Mailgun template version (e.g. `"fr"`, `"de"`). Only used when `template` is set. |
 | `html`    | `string` | Inline HTML body. Used when no `template` is set.                           |
 | `text`    | `string` | Plain-text body. Used when neither `template` nor `html` is set.            |
@@ -272,7 +272,7 @@ Sends a test email through the Mailgun notification provider.
 | Field      | Type                      | Required | Description                                                    |
 |------------|---------------------------|----------|----------------------------------------------------------------|
 | `to`       | `string` (email)          | Yes      | Recipient address. Must be a registered admin user email.      |
-| `subject`  | `string`                  | Yes      | Email subject line.                                            |
+| `subject`  | `string`                  | No       | Email subject line. If omitted, Mailgun uses the template's own subject. |
 | `template` | `string`                  | No       | Mailgun template name. If omitted, `data.text` or `data.html` is used for the body. |
 | `from`     | `string` (email)          | No       | Sender address override. Defaults to the plugin's configured `from`. |
 | `reply_to` | `string` (email)          | No       | Reply-To address. When set, replies are directed to this address instead of the sender. |
@@ -280,7 +280,7 @@ Sends a test email through the Mailgun notification provider.
 
 **Constraint**: `to` must be the email address of a registered Medusa admin user. The endpoint looks up the address in the user service before sending. Arbitrary addresses are rejected.
 
-If no template is specified and `data` contains neither `html` nor `text`, the plugin sends a plain-text fallback: `Test email — subject: <subject>`.
+If no template is specified and `data` contains neither `html` nor `text`, the plugin sends a plain-text fallback: `Test email — subject: <subject>` (or just `Test email` if no subject is provided).
 
 ### Response
 
@@ -390,7 +390,7 @@ Coverage includes:
 - Inline HTML and plain-text paths
 - Fallback path — JSON-stringified `data`
 - Sender resolution — configured address vs. `noreply@<domain>` default
-- Subject default (`"Notification"`) when `data.subject` is absent
+- Subject omitted from payload when `data.subject` is absent (defers to template subject)
 - Base64 attachment decoding
 - Mailgun API error wrapping (`error.details`, `error.message`, unknown errors)
 - EU region endpoint selection (`https://api.eu.mailgun.net`)

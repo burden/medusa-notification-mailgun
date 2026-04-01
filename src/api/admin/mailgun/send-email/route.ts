@@ -36,7 +36,7 @@ export const POST = async (
       data: {
         ...data,
         subject,
-        ...(!template && !data?.html && !data?.text ? { text: `Test email — subject: ${subject}` } : {}),
+        ...(!template && !data?.html && !data?.text ? { text: subject ? `Test email — subject: ${subject}` : "Test email" } : {}),
       },
       ...(from ? { from } : {}),
       ...(reply_to ? { reply_to } : {}),

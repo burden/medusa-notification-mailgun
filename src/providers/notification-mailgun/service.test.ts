@@ -326,7 +326,7 @@ describe("send", () => {
       )
     })
 
-    it("defaults subject to 'Notification'", async () => {
+    it("omits subject when not provided (lets template subject apply)", async () => {
       mockCreate.mockResolvedValue({ id: "msg-10" })
       const service = createService()
 
@@ -336,10 +336,8 @@ describe("send", () => {
         data: { text: "hi" },
       } as any)
 
-      expect(mockCreate).toHaveBeenCalledWith(
-        "mail.example.com",
-        expect.objectContaining({ subject: "Notification" })
-      )
+      const payload = mockCreate.mock.calls[0][1]
+      expect(payload.subject).toBeUndefined()
     })
   })
 

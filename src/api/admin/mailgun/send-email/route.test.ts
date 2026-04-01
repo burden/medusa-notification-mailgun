@@ -97,6 +97,20 @@ describe("POST /admin/mailgun/test", () => {
       )
     })
 
+    it("injects generic fallback text when no template, html, text, or subject", async () => {
+      mockCreateNotifications.mockResolvedValue({ id: "notif-4b" })
+      const req = makeReqWithScope({ to: "user@example.com" })
+      const res = makeRes()
+
+      await POST(req, res)
+
+      expect(mockCreateNotifications).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ text: "Test email" }),
+        })
+      )
+    })
+
     it("does not inject fallback text when template is provided", async () => {
       mockCreateNotifications.mockResolvedValue({ id: "notif-5" })
       const req = makeReqWithScope({ to: "user@example.com", subject: "With template", template: "my-tpl" })

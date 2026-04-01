@@ -4,7 +4,7 @@ import { MiddlewareRoute } from "@medusajs/framework/http"
 
 export const PostAdminMailgunTestSchema = z.object({
   to: z.string().email(),
-  subject: z.string().min(1),
+  subject: z.string().min(1).optional(),
   template: z.string().optional(),
   from: z.string().email().optional(),
   reply_to: z.string().email().optional(),

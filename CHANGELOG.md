@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reply-To header support (`reply_to` field on notification data)
 - Per-notification sender override (`data.from` field)
 - Locale support via Mailgun's `t:version` parameter
-- Full test suite (60 tests) covering provider, admin routes, and scan utility
+- Full test suite (61 tests) covering provider, admin routes, and scan utility
 - GitHub Actions CI workflow with secrets scanning via Gitleaks
 - Quickstart guide and event wiring documentation
 

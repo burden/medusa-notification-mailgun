@@ -122,7 +122,7 @@ const SendTestTab = () => {
   const [from, setFrom] = useState("")
   const [replyTo, setReplyTo] = useState("")
   const [variables, setVariables] = useState<VariableRow[]>([])
-  const [errors, setErrors] = useState<{ to?: string; subject?: string }>({})
+  const [errors, setErrors] = useState<{ to?: string }>({})
 
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -168,7 +168,7 @@ const SendTestTab = () => {
   const handleSubmit = () => {
     const newErrors: typeof errors = {}
     if (!to) newErrors.to = "Please select a recipient"
-    if (!subject.trim()) newErrors.subject = "Subject is required"
+
 
     if (Object.keys(newErrors).length) {
       setErrors(newErrors)
@@ -189,7 +189,7 @@ const SendTestTab = () => {
 
     sendTest.mutate({
       to,
-      subject: subject.trim(),
+      ...(subject.trim() ? { subject: subject.trim() } : {}),
       ...(template.trim() ? { template: template.trim() } : {}),
       ...(from.trim() ? { from: from.trim() } : {}),
       ...(replyTo.trim() ? { reply_to: replyTo.trim() } : {}),
@@ -242,7 +242,7 @@ const SendTestTab = () => {
       {/* Subject */}
       <div className="flex flex-col gap-y-2">
         <Label htmlFor="subject" size="small" weight="plus">
-          Subject *
+          Subject
         </Label>
         <Input
           id="subject"
@@ -251,11 +251,6 @@ const SendTestTab = () => {
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
         />
-        {errors.subject && (
-          <Text size="small" className="text-ui-fg-error">
-            {errors.subject}
-          </Text>
-        )}
       </div>
 
       {/* Message body */}
