@@ -44,9 +44,11 @@ export const POST = async (
 
     res.json({ success: true, notification_id: result?.id || result })
   } catch (error: any) {
+    const corrId = Math.random().toString(36).slice(2, 10)
+    console.error(`[mailgun] test send failed (ref: ${corrId})`, error)
     throw new MedusaError(
       MedusaError.Types.UNEXPECTED_STATE,
-      `Failed to send test email: ${error?.message || "Unknown error"}`
+      `Failed to send test email (ref: ${corrId})`
     )
   }
 }
