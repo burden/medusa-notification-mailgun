@@ -11,6 +11,11 @@ const config: Config = {
       diagnostics: { ignoreCodes: [151002] },
     }],
   },
+  coverageThreshold: {
+    global: {
+      statements: 80,
+    },
+  },
 }
 
 export default config
