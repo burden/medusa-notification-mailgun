@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-04-02
+
+### Fixed
+- Updated documentation references from `medusa-notification-mailgun` to scoped `@mdgar/medusa-notification-mailgun`
+
+### Changed
+- Added npm version badge and styled header to README
+
 ## [0.2.0] - 2026-03-31 — First NPM release
 
 ### Added
@@ -42,5 +50,5 @@ Initial implementation of the Mailgun notification provider for MedusaJS v2.
 - EU region support
 - Basic `validateOptions` with required field checks
 
+[0.2.1]: https://github.com/burden/medusa-notification-mailgun/releases/tag/v0.2.1
 [0.2.0]: https://github.com/burden/medusa-notification-mailgun/releases/tag/v0.2.0
-[0.1.0]: https://github.com/burden/medusa-notification-mailgun/releases/tag/v0.1.0
