@@ -8,7 +8,7 @@ This tutorial walks you from a fresh Medusa installation to a working order conf
 ## 1. Install the plugin
 
 ```bash
-npm install medusa-notification-mailgun mailgun.js
+npm install @mdgar/medusa-notification-mailgun mailgun.js
 ```
 
 `mailgun.js` is a peer dependency — install it alongside the plugin.
@@ -37,7 +37,7 @@ module.exports = defineConfig({
       options: {
         providers: [
           {
-            resolve: "medusa-notification-mailgun/providers/notification-mailgun",
+            resolve: "@mdgar/medusa-notification-mailgun/providers/notification-mailgun",
             id: "mailgun",
             options: {
               channels: ["email"],

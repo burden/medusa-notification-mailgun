@@ -1,8 +1,21 @@
-# medusa-notification-mailgun
+<div align="center">
+  <h1>@mdgar/medusa-notification-mailgun</h1>
+  <h3>Mailgun notification provider plugin for MedusaJS v2.</h3>
+  <br>
+  <br>
+</div>
 
-[![Tests](https://github.com/burden/medusa-notification-mailgun/actions/workflows/test.yml/badge.svg)](https://github.com/burden/medusa-notification-mailgun/actions/workflows/test.yml)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@mdgar/medusa-notification-mailgun/">
+    <img src="https://img.shields.io/npm/v/@mdgar/medusa-notification-mailgun.svg" alt="npm">
+  </a>
 
-Mailgun notification provider plugin for [MedusaJS](https://medusajs.com/) v2.
+  <a href="https://github.com/burden/medusa-notification-mailgun/actions/workflows/test.yml">
+    <img src="https://github.com/burden/medusa-notification-mailgun/actions/workflows/test.yml/badge.svg" alt="Tests badge">
+  </a>
+</p>
+
+---
 
 Sends transactional emails via the Mailgun HTTP API. Supports stored templates (with localization), inline HTML/text, file attachments, and includes an Admin UI page for sending test emails and verifying event coverage.
 
@@ -26,11 +39,11 @@ Sends transactional emails via the Mailgun HTTP API. Supports stored templates (
 ## Installation
 
 ```bash
-npm install medusa-notification-mailgun mailgun.js
+npm install @mdgar/medusa-notification-mailgun mailgun.js
 # or
-yarn add medusa-notification-mailgun mailgun.js
+yarn add @mdgar/medusa-notification-mailgun mailgun.js
 # or
-pnpm add medusa-notification-mailgun mailgun.js
+pnpm add @mdgar/medusa-notification-mailgun mailgun.js
 ```
 
 `mailgun.js` is a peer dependency — install it alongside the plugin.
@@ -50,7 +63,7 @@ module.exports = defineConfig({
       options: {
         providers: [
           {
-            resolve: "medusa-notification-mailgun/providers/notification-mailgun",
+            resolve: "@mdgar/medusa-notification-mailgun/providers/notification-mailgun",
             id: "mailgun",
             options: {
               channels: ["email"],
@@ -370,7 +383,7 @@ npm run build
 npm link
 
 # In your Medusa project
-npm link medusa-notification-mailgun
+npm link @mdgar/medusa-notification-mailgun
 ```
 
 After any source change, run `npm run build` in the plugin directory again, or keep `npm run dev` running to rebuild continuously.
