@@ -5,7 +5,7 @@ import {
 import type {
   ProviderSendNotificationDTO,
   ProviderSendNotificationResultsDTO,
-} from "@medusajs/types"
+} from "@medusajs/framework/types"
 import FormData from "form-data"
 
 export type MailgunOptions = {
