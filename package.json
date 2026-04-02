@@ -1,6 +1,6 @@
 {
   "name": "@mdgar/medusa-notification-mailgun",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Mailgun notification provider plugin for MedusaJS v2",
   "license": "MIT",
   "keywords": [
@@ -34,12 +34,10 @@
     "test": "jest",
     "prepublishOnly": "medusa plugin:build"
   },
-  "dependencies": {
-    "form-data": "^4.0.1"
-  },
   "peerDependencies": {
-    "@medusajs/framework": ">=2.3.0",
-    "@medusajs/medusa": ">=2.3.0",
+    "@medusajs/framework": "^2.13.0",
+    "@medusajs/medusa": "^2.13.0",
+    "form-data": "^4.0.1",
     "mailgun.js": "^12.1.0"
   },
   "devDependencies": {
@@ -47,16 +45,14 @@
     "@medusajs/cli": "^2.13.5",
     "@medusajs/framework": "^2.13.5",
     "@medusajs/icons": "^2.13.5",
+    "@medusajs/js-sdk": "^2.13.5",
     "@medusajs/medusa": "^2.13.5",
-    "@medusajs/test-utils": "^2.13.5",
     "@medusajs/ui": "^4.0.4",
     "@swc/core": "^1.5.7",
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",
     "mailgun.js": "^12.1.0",
     "ts-jest": "^29.4.6",
-    "ts-node": "^10.9.2",
-    "yalc": "^1.0.0-pre.53",
     "typescript": "^5.6.0"
   },
   "engines": {

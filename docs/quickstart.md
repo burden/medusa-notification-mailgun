@@ -27,10 +27,15 @@ MAILGUN_FROM=no-reply@yourdomain.com
 
 ## 3. Register the plugin in medusa-config.ts
 
+Two entries are needed: `plugins` loads the admin UI and API routes, `modules` registers the notification provider.
+
 ```ts
 import { defineConfig } from "@medusajs/framework/utils"
 
 module.exports = defineConfig({
+  plugins: [
+    "@mdgar/medusa-notification-mailgun",
+  ],
   modules: [
     {
       resolve: "@medusajs/medusa/notification",

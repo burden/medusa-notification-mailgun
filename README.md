@@ -50,13 +50,16 @@ pnpm add @mdgar/medusa-notification-mailgun mailgun.js
 
 ## Configuration
 
-Register the provider in `medusa-config.ts` inside the `notification` module:
+Add the plugin to `medusa-config.ts`. Two entries are needed: a `plugins` entry to load the admin UI and API routes, and a `modules` entry to register the notification provider.
 
 ```ts
 import { defineConfig } from "@medusajs/framework/utils"
 
 module.exports = defineConfig({
   // ...
+  plugins: [
+    "@mdgar/medusa-notification-mailgun",
+  ],
   modules: [
     {
       resolve: "@medusajs/medusa/notification",
