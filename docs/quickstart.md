@@ -8,7 +8,7 @@ This tutorial walks you from a fresh Medusa installation to a working order conf
 ## 1. Install the plugin
 
 ```bash
-npm install @mdgar/medusa-notification-mailgun mailgun.js
+pnpm add @mdgar/medusa-notification-mailgun mailgun.js
 ```
 
 `mailgun.js` is a peer dependency — install it alongside the plugin.
@@ -112,7 +112,7 @@ Medusa event payloads only contain `{ id }`. The subscriber fetches the full ord
 ## 6. Start Medusa and place a test order
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Place an order through your storefront. Within a few seconds the order confirmation email should arrive at the customer's address.

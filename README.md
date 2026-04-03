@@ -39,11 +39,11 @@ Sends transactional emails via the Mailgun HTTP API. Supports stored templates (
 ## Installation
 
 ```bash
+pnpm add @mdgar/medusa-notification-mailgun mailgun.js
+# or
 npm install @mdgar/medusa-notification-mailgun mailgun.js
 # or
 yarn add @mdgar/medusa-notification-mailgun mailgun.js
-# or
-pnpm add @mdgar/medusa-notification-mailgun mailgun.js
 ```
 
 `mailgun.js` is a peer dependency — install it alongside the plugin.
@@ -362,41 +362,41 @@ See [`docs/checklist-endpoint.md`](docs/checklist-endpoint.md) for the full resp
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Build the plugin
-npm run build
+pnpm run build
 
 # Start in watch/develop mode
-npm run dev
+pnpm run dev
 
 # Run tests
-npm test
+pnpm test
 ```
 
 This plugin uses the official Medusa plugin toolchain (`medusa plugin:build` / `medusa plugin:develop`).
 
-### Local development with npm link
+### Local development with pnpm link
 
 To test the plugin in a local Medusa project before publishing:
 
 ```bash
 # In this plugin directory — build first, then link
-npm run build
-npm link
+pnpm run build
+pnpm link --global
 
 # In your Medusa project
-npm link @mdgar/medusa-notification-mailgun
+pnpm link --global @mdgar/medusa-notification-mailgun
 ```
 
-After any source change, run `npm run build` in the plugin directory again, or keep `npm run dev` running to rebuild continuously.
+After any source change, run `pnpm run build` in the plugin directory again, or keep `pnpm run dev` running to rebuild continuously.
 
 ## Tests
 
 The test suite uses Jest and ts-jest. Run with:
 
 ```bash
-npm test
+pnpm test
 ```
 
 Coverage includes:
