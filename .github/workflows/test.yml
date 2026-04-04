@@ -2,11 +2,7 @@ name: Tests
 
 on:
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
 
 permissions: {}
 
@@ -19,27 +15,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        id: cache-node-modules
-        with:
-          path: node_modules
-          key: node-modules-${{ hashFiles('package-lock.json') }}
+          cache: "pnpm"
 
       - name: Install dependencies
-        if: steps.cache-node-modules.outputs.cache-hit != 'true'
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Run tests
-        run: npm test
+        run: pnpm test
 
   secrets-scan:
     name: Scan for secrets

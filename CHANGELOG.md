@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-04-03
+
+### Changed
+- Migrated from npm to pnpm as the project package manager
+- Added `"packageManager": "pnpm@9.15.4"` to package.json
+- Replaced package-lock.json with pnpm-lock.yaml
+- Updated CI workflow to use pnpm (pnpm/action-setup@v4)
+- Updated documentation to use pnpm commands
+
+## [0.2.3] - 2026-04-02
+
+### Fixed
+- Widened peer dependencies to `^2.3.0` to support all Medusa 2.x versions from 2.3 onward
+- Import types from `@medusajs/framework/types` instead of `@medusajs/types` to avoid relying on a transitive dependency
+
+## [0.2.2] - 2026-04-02
+
+### Fixed
+- Tightened peer deps and cleaned up dependencies
+- Added plugin provider configuration example to docs
+
 ## [0.2.1] - 2026-04-02
 
 ### Fixed
@@ -50,5 +71,8 @@ Initial implementation of the Mailgun notification provider for MedusaJS v2.
 - EU region support
 - Basic `validateOptions` with required field checks
 
+[0.2.4]: https://github.com/burden/medusa-notification-mailgun/releases/tag/v0.2.4
+[0.2.3]: https://github.com/burden/medusa-notification-mailgun/releases/tag/v0.2.3
+[0.2.2]: https://github.com/burden/medusa-notification-mailgun/releases/tag/v0.2.2
 [0.2.1]: https://github.com/burden/medusa-notification-mailgun/releases/tag/v0.2.1
 [0.2.0]: https://github.com/burden/medusa-notification-mailgun/releases/tag/v0.2.0
