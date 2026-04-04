@@ -1,6 +1,6 @@
 {
   "name": "@mdgar/medusa-notification-mailgun",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Mailgun notification provider plugin for MedusaJS v2",
   "license": "MIT",
   "keywords": [
