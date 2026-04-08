@@ -1,5 +1,5 @@
 import FormData from "form-data"
-import type { Interfaces } from "mailgun.js/definitions"
+import type { Interfaces } from "mailgun.js/definitions" with { "resolution-mode": "import" }
 type IMailgunClient = Interfaces.IMailgunClient
 
 export type CreateMailgunClientOptions = {

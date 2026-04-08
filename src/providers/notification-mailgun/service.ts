@@ -9,7 +9,7 @@ import type {
   ProviderSendNotificationResultsDTO,
 } from "@medusajs/framework/types"
 import { randomUUID } from "crypto"
-import type { Interfaces } from "mailgun.js/definitions"
+import type { Interfaces } from "mailgun.js/definitions" with { "resolution-mode": "import" }
 type IMailgunClient = Interfaces.IMailgunClient
 import { createMailgunClient } from "../../modules/mailgun/client"
 
