@@ -8,7 +8,13 @@ export const PostAdminMailgunTestSchema = z.object({
   template: z.string().optional(),
   from: z.string().email().optional(),
   reply_to: z.string().email().optional(),
-  data: z.record(z.string()).optional(),
+  data: z
+    .object({
+      locale: z.string().optional(),
+      variables: z.record(z.unknown()).optional(),
+    })
+    .passthrough()
+    .optional(),
 })
 
 export const mailgunTestMiddlewares: MiddlewareRoute[] = [
