@@ -125,7 +125,10 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
     } else if (data?.text) {
       messagePayload.text = data.text as string
     } else {
-      messagePayload.text = JSON.stringify(data, null, 2)
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Notification must include a template, html, or text body"
+      )
     }
 
     const attachments = (notification as any).attachments

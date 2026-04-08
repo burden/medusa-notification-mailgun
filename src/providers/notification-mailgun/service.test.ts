@@ -203,24 +203,23 @@ describe("send", () => {
     })
   })
 
-  describe("fallback path", () => {
-    it("JSON-stringifies data when no template, html, or text", async () => {
-      mockCreate.mockResolvedValue({ id: "msg-6" })
+  describe("no-content path", () => {
+    it("throws INVALID_DATA when no template, html, or text is provided", async () => {
       const service = createService()
       const data = { subject: "Test", order_id: "ord_1" }
 
-      await service.send({
-        to: "user@example.com",
-        channel: "email",
-        data,
-      } as any)
+      const thrown = await service
+        .send({
+          to: "user@example.com",
+          channel: "email",
+          data,
+        } as any)
+        .catch((e) => e)
 
-      expect(mockCreate).toHaveBeenCalledWith(
-        "mail.example.com",
-        expect.objectContaining({
-          text: JSON.stringify(data, null, 2),
-        })
-      )
+      expect(thrown).toBeInstanceOf(MedusaError)
+      expect(thrown.type).toBe(MedusaError.Types.INVALID_DATA)
+      expect(thrown.message).toMatch(/template, html, or text/)
+      expect(mockCreate).not.toHaveBeenCalled()
     })
   })
 
