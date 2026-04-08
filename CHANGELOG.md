@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-04-07
+
+### Fixed
+- Moved `form-data` and `mailgun.js` from `peerDependencies` to `dependencies` so host apps don't need to install them (TICKET-12)
+- Aligned send-email zod schema with nested `data` shape (TICKET-10)
+- Throw on empty notification body instead of leaking serialized DTO to recipients (TICKET-3)
+
+### Security
+- Restricted `package.json` exports to explicit subpaths (`.`, `./providers/notification-mailgun`, `./admin`, `./package.json`); removed the `"./*"` wildcard that exposed the entire build tree (TICKET-13)
+
+### Breaking
+- Deep imports relying on the previous `"./*"` exports wildcard will no longer resolve. Use the documented `./providers/notification-mailgun` and `./admin` subpaths.
+
 ## [0.2.4] - 2026-04-03
 
 ### Changed
