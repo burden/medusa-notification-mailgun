@@ -465,7 +465,7 @@ describe("send", () => {
       expect(thrown.message).not.toContain("secret-internal.com")
       expect(thrown.message).not.toContain("suspended")
       // Must include a correlation reference for support lookup
-      expect(thrown.message).toMatch(/ref: [a-z0-9]+/)
+      expect(thrown.message).toMatch(/ref: mg_[a-f0-9]+/)
     })
 
     it("re-throws INVALID_DATA errors without wrapping (safe validation errors)", async () => {
@@ -494,7 +494,7 @@ describe("send", () => {
       } as any).catch((e) => e)
 
       expect(thrown).toBeInstanceOf(MedusaError)
-      expect(thrown.message).toMatch(/Mailgun send failed \(ref: [a-z0-9]+\)/)
+      expect(thrown.message).toMatch(/Mailgun send failed \(ref: mg_[a-f0-9]+\)/)
     })
   })
 
@@ -607,7 +607,7 @@ describe("send", () => {
       expect(thrown).toBeInstanceOf(MedusaError)
       // Must not leak internal detail
       expect(thrown.message).not.toContain("secret-key-abc")
-      expect(thrown.message).toMatch(/ref: [a-z0-9]+/)
+      expect(thrown.message).toMatch(/ref: mg_[a-f0-9]+/)
     })
 
     it("handles errors with no message property and returns sanitized message", async () => {
@@ -616,7 +616,7 @@ describe("send", () => {
 
       const thrown = await service.getTemplates().catch((e) => e)
       expect(thrown).toBeInstanceOf(MedusaError)
-      expect(thrown.message).toMatch(/Mailgun templates fetch failed \(ref: [a-z0-9]+\)/)
+      expect(thrown.message).toMatch(/Mailgun templates fetch failed \(ref: mg_[a-f0-9]+\)/)
     })
   })
 })

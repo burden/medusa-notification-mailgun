@@ -11,11 +11,9 @@ const config: Config = {
       diagnostics: { ignoreCodes: [151002] },
     }],
   },
-  coverageThreshold: {
-    global: {
-      statements: 80,
-    },
-  },
+  // Coverage threshold removed (TICKET-11): the previous 80% statements gate
+  // never fired because `collectCoverage` was never enabled. Re-add both
+  // together if/when coverage gating becomes a real CI requirement.
 }
 
 export default config

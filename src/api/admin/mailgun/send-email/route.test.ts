@@ -7,6 +7,7 @@ function makeRes() {
 
 const mockCreateNotifications = jest.fn()
 const mockListUsers = jest.fn()
+const mockLoggerError = jest.fn()
 
 const mockNotificationService = {
   createNotifications: mockCreateNotifications,
@@ -16,12 +17,20 @@ const mockUserService = {
   listUsers: mockListUsers,
 }
 
+const mockLogger = {
+  error: mockLoggerError,
+  info: jest.fn(),
+  warn: jest.fn(),
+  debug: jest.fn(),
+}
+
 function makeReqWithScope(body: Record<string, unknown>) {
   return {
     validatedBody: body,
     scope: {
       resolve: jest.fn().mockImplementation((module: string) => {
         if (module === "user") return mockUserService
+        if (module === "logger") return mockLogger
         return mockNotificationService
       }),
     },
@@ -31,6 +40,7 @@ function makeReqWithScope(body: Record<string, unknown>) {
 beforeEach(() => {
   mockCreateNotifications.mockReset()
   mockListUsers.mockReset()
+  mockLoggerError.mockReset()
   mockListUsers.mockResolvedValue([{ id: "user-1", email: "user@example.com" }])
 })
 
@@ -151,42 +161,37 @@ describe("POST /admin/mailgun/test", () => {
       mockCreateNotifications.mockRejectedValue(new Error("Provider unavailable"))
       const req = makeReqWithScope({ to: "user@example.com", subject: "Hi", template: "t1" })
       const res = makeRes()
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation()
 
-      await expect(POST(req, res)).rejects.toThrow(/^Failed to send test email \(ref: [a-z0-9]+\)$/)
-      consoleSpy.mockRestore()
+      await expect(POST(req, res)).rejects.toThrow(/^Failed to send test email \(ref: mg_[a-f0-9]+\)$/)
     })
 
     it("throws MedusaError of type UNEXPECTED_STATE", async () => {
       mockCreateNotifications.mockRejectedValue(new Error("oops"))
       const req = makeReqWithScope({ to: "user@example.com", subject: "Hi", template: "t1" })
       const res = makeRes()
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation()
 
       await expect(POST(req, res)).rejects.toBeInstanceOf(MedusaError)
-      consoleSpy.mockRestore()
     })
 
-    it("logs the original error server-side but does not expose it to the client", async () => {
+    it("logs the original error to the Medusa logger but does not expose it to the client", async () => {
       const originalError = new Error("Provider unavailable")
       mockCreateNotifications.mockRejectedValue(originalError)
       const req = makeReqWithScope({ to: "user@example.com", subject: "Hi", template: "t1" })
       const res = makeRes()
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation()
 
-      await expect(POST(req, res)).rejects.toThrow(/Failed to send test email \(ref:/)
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("[mailgun] test send failed"), originalError)
-      consoleSpy.mockRestore()
+      await expect(POST(req, res)).rejects.toThrow(/Failed to send test email \(ref: mg_/)
+      expect(mockLoggerError).toHaveBeenCalledTimes(1)
+      const logged = mockLoggerError.mock.calls[0][0] as string
+      expect(logged).toContain("[mailgun] test send failed")
+      expect(logged).toContain("Provider unavailable")
     })
 
     it("handles errors without a message", async () => {
       mockCreateNotifications.mockRejectedValue({})
       const req = makeReqWithScope({ to: "user@example.com", subject: "Hi", template: "t1" })
       const res = makeRes()
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation()
 
-      await expect(POST(req, res)).rejects.toThrow(/^Failed to send test email \(ref: [a-z0-9]+\)$/)
-      consoleSpy.mockRestore()
+      await expect(POST(req, res)).rejects.toThrow(/^Failed to send test email \(ref: mg_[a-f0-9]+\)$/)
     })
   })
 })

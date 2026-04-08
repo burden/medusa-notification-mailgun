@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, type CSSProperties } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { defineRouteConfig } from "@medusajs/admin-sdk"
 import {
@@ -50,12 +50,26 @@ interface ChecklistResponse {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function relativeTime(isoString: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime()
+function relativeTime(isoString: string, now: number): string {
+  const diffMs = now - new Date(isoString).getTime()
   const diffMins = Math.floor(diffMs / 60_000)
   if (diffMins < 1) return "Checked just now"
   if (diffMins === 1) return "Checked 1 minute ago"
   return `Checked ${diffMins} minutes ago`
+}
+
+/**
+ * Returns a `now` timestamp that updates on a fixed interval. One state cell,
+ * one timer — replaces the previous per-row `forceUpdate` pattern that fired
+ * inside a row-level effect.
+ */
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs)
+    return () => clearInterval(id)
+  }, [intervalMs])
+  return now
 }
 
 function absoluteTime(isoString: string): string {
@@ -69,42 +83,47 @@ function absoluteTime(isoString: string): string {
 // HintText
 // ---------------------------------------------------------------------------
 
+/**
+ * TICKET-17: previously this component sliced the hint at the first ". " and
+ * threw the tail away unless expanded. That broke any hint with abbreviations
+ * (e.g. "v1.2 ...") and hid content from screen readers. The whole hint now
+ * stays in the DOM at all times — collapsed state is purely visual via CSS
+ * `-webkit-line-clamp`, so assistive tech reads the full text either way.
+ */
 const HintText = ({ hint }: { hint: string }) => {
   const [expanded, setExpanded] = useState(false)
-  const dotIndex = hint.indexOf(". ")
-  const hasMore = dotIndex !== -1 && dotIndex < hint.length - 2
-  const first = hasMore ? hint.slice(0, dotIndex + 1) : hint
-  const rest = hasMore ? hint.slice(dotIndex + 2) : ""
+
+  const collapsedStyle: CSSProperties = expanded
+    ? {}
+    : {
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
+        overflow: "hidden",
+      }
 
   return (
-    <span className="text-ui-fg-subtle" style={{ fontSize: "0.75rem", lineHeight: "1rem" }}>
-      {first}
-      {hasMore && !expanded && (
-        <>
-          {" "}
-          <button
-            onClick={() => setExpanded(true)}
-            className="inline-flex items-center gap-x-0.5 text-ui-fg-interactive hover:underline"
-            style={{ fontSize: "inherit", background: "none", border: "none", padding: 0, cursor: "pointer" }}
-          >
-            more ▸
-          </button>
-        </>
-      )}
-      {hasMore && expanded && (
-        <>
-          {" "}
-          {rest}
-          {" "}
-          <button
-            onClick={() => setExpanded(false)}
-            className="inline-flex items-center gap-x-0.5 text-ui-fg-interactive hover:underline"
-            style={{ fontSize: "inherit", background: "none", border: "none", padding: 0, cursor: "pointer" }}
-          >
-            ▾ less
-          </button>
-        </>
-      )}
+    <span
+      className="text-ui-fg-subtle"
+      style={{ fontSize: "0.75rem", lineHeight: "1rem" }}
+    >
+      <span style={collapsedStyle}>{hint}</span>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="inline-flex items-center gap-x-0.5 text-ui-fg-interactive hover:underline"
+        style={{
+          fontSize: "inherit",
+          background: "none",
+          border: "none",
+          padding: 0,
+          marginTop: "0.125rem",
+          cursor: "pointer",
+        }}
+      >
+        {expanded ? "▾ less" : "more ▸"}
+      </button>
     </span>
   )
 }
@@ -399,7 +418,9 @@ const SendTestTab = () => {
 
 const ChecklistTab = () => {
   const [checklistEnabled, setChecklistEnabled] = useState(false)
-  const [, forceUpdate] = useState(0)
+  // TICKET-16: single ticking clock for relative-time display, replaces the
+  // previous per-row forceUpdate timer.
+  const now = useNow(60_000)
 
   const { data: checklist, isFetching, isError, error, refetch } = useQuery<ChecklistResponse>({
     queryKey: ["mailgun-checklist"],
@@ -417,13 +438,6 @@ const ChecklistTab = () => {
       refetch()
     }
   }
-
-  // Update relative time every 60s
-  useEffect(() => {
-    if (!checklist) return
-    const interval = setInterval(() => forceUpdate((n) => n + 1), 60_000)
-    return () => clearInterval(interval)
-  }, [checklist])
 
   const statusMessage = (status: "pass" | "warn" | "fail", inlineCount: number) => {
     const inlineNote = inlineCount > 0
@@ -457,7 +471,7 @@ const ChecklistTab = () => {
           {checklist && (
             <Tooltip content={absoluteTime(checklist.checked_at)}>
               <Text size="xsmall" className="text-ui-fg-subtle cursor-default">
-                {relativeTime(checklist.checked_at)}
+                <time dateTime={checklist.checked_at}>{relativeTime(checklist.checked_at, now)}</time>
               </Text>
             </Tooltip>
           )}

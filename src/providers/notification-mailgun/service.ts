@@ -1,18 +1,41 @@
 import {
   AbstractNotificationProviderService,
+  ContainerRegistrationKeys,
   MedusaError,
 } from "@medusajs/framework/utils"
 import type {
+  Logger,
   ProviderSendNotificationDTO,
   ProviderSendNotificationResultsDTO,
 } from "@medusajs/framework/types"
-import FormData from "form-data"
+import { randomUUID } from "crypto"
+import type { Interfaces } from "mailgun.js/definitions"
+type IMailgunClient = Interfaces.IMailgunClient
+import { createMailgunClient } from "../../modules/mailgun/client"
 
 export type MailgunOptions = {
   api_key: string
   domain: string
   from?: string
   region?: "us" | "eu"
+}
+
+/**
+ * Local extension of `ProviderSendNotificationDTO` covering the optional
+ * `from` and `attachments` fields the Mailgun provider accepts. The framework
+ * DTO doesn't model these, but rather than scattering `(notification as any)`
+ * casts through the body of `send()`, we narrow once at the entry point.
+ */
+type MailgunAttachment = { content: string; filename: string }
+type MailgunNotificationDTO = ProviderSendNotificationDTO & {
+  from?: string
+  attachments?: MailgunAttachment[]
+}
+
+function toMailgunDTO(
+  notification: ProviderSendNotificationDTO
+): MailgunNotificationDTO {
+  return notification as MailgunNotificationDTO
 }
 
 class MailgunNotificationProviderService extends AbstractNotificationProviderService {
@@ -40,39 +63,35 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
     }
   }
 
-  private clientPromise_?: Promise<any>
+  private clientPromise_?: Promise<IMailgunClient>
   private domain_: string
   private from_: string
   private options_: MailgunOptions
+  private logger_: Logger
 
-  constructor(container: Record<string, unknown>, options: MailgunOptions) {
+  constructor(
+    container: Record<string, unknown>,
+    options: MailgunOptions
+  ) {
     super()
 
     this.options_ = options
     this.domain_ = options.domain
     this.from_ = options.from || `noreply@${options.domain}`
+    this.logger_ = resolveLogger(container)
   }
 
-  private async initializeClient_(): Promise<any> {
+  private async initializeClient_(): Promise<IMailgunClient> {
     // Memoize the in-flight promise so concurrent cold-start callers share one
     // dynamic import + client construction. On failure, clear the cache so the
     // next caller retries rather than permanently reusing a rejected promise.
     if (this.clientPromise_) {
       return this.clientPromise_
     }
-    this.clientPromise_ = (async () => {
-      const { default: Mailgun } = await import("mailgun.js")
-      const mailgun = new Mailgun(FormData)
-      const url =
-        this.options_.region === "eu"
-          ? "https://api.eu.mailgun.net"
-          : "https://api.mailgun.net"
-      return mailgun.client({
-        username: "api",
-        key: this.options_.api_key,
-        url,
-      })
-    })().catch((err) => {
+    this.clientPromise_ = createMailgunClient({
+      api_key: this.options_.api_key,
+      region: this.options_.region,
+    }).catch((err) => {
       this.clientPromise_ = undefined
       throw err
     })
@@ -82,7 +101,8 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
   async send(
     notification: ProviderSendNotificationDTO
   ): Promise<ProviderSendNotificationResultsDTO> {
-    const { to, template, data } = notification
+    const dto = toMailgunDTO(notification)
+    const { to, template, data } = dto
 
     if (!to) {
       throw new MedusaError(
@@ -92,7 +112,7 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
     }
 
     const messagePayload: Record<string, unknown> = {
-      from: (notification as any).from?.trim() || (data?.from as string)?.trim() || this.from_,
+      from: dto.from?.trim() || (data?.from as string)?.trim() || this.from_,
       to: [to],
     }
 
@@ -137,31 +157,30 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
       )
     }
 
-    const attachments = (notification as any).attachments
+    const attachments = dto.attachments
     if (attachments?.length) {
       // Validate each attachment filename and size before passing to Mailgun
       const SAFE_FILENAME = /^[\w\-. ]+$/
       const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024 // 25 MB per Mailgun's limit
-      messagePayload.attachment = attachments.map(
-        (att: { content: string; filename: string }) => {
-          if (!SAFE_FILENAME.test(att.filename)) {
-            throw new MedusaError(
-              MedusaError.Types.INVALID_DATA,
-              `Attachment filename contains invalid characters: ${att.filename}`
-            )
-          }
-          const buf = Buffer.from(att.content, "base64")
-          if (buf.byteLength > MAX_ATTACHMENT_BYTES) {
-            throw new MedusaError(
-              MedusaError.Types.INVALID_DATA,
-              `Attachment "${att.filename}" exceeds the 25 MB size limit`
-            )
-          }
-          return { data: buf, filename: att.filename }
+      messagePayload.attachment = attachments.map((att) => {
+        if (!SAFE_FILENAME.test(att.filename)) {
+          throw new MedusaError(
+            MedusaError.Types.INVALID_DATA,
+            `Attachment filename contains invalid characters: ${att.filename}`
+          )
         }
-      )
+        const buf = Buffer.from(att.content, "base64")
+        if (buf.byteLength > MAX_ATTACHMENT_BYTES) {
+          throw new MedusaError(
+            MedusaError.Types.INVALID_DATA,
+            `Attachment "${att.filename}" exceeds the 25 MB size limit`
+          )
+        }
+        return { data: buf, filename: att.filename }
+      })
     }
 
+    const corrId = newCorrelationId()
     try {
       const client = await this.initializeClient_()
       const result = await client.messages.create(
@@ -169,15 +188,14 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
         messagePayload as any
       )
 
-      return { id: result.id || result.message }
-    } catch (error: any) {
+      return { id: (result as { id?: string; message?: string }).id || (result as { message?: string }).message || "" }
+    } catch (error: unknown) {
       // Re-throw validation errors (INVALID_DATA) as-is — they are safe to surface
       if (error instanceof MedusaError && error.type === MedusaError.Types.INVALID_DATA) {
         throw error
       }
       // Log the full Mailgun error server-side; return only a generic message to callers
-      const corrId = Math.random().toString(36).slice(2, 10)
-      console.error(`[mailgun-service][${corrId}] send() failed:`, error)
+      this.logger_.error(`[mailgun-service][${corrId}] send() failed: ${formatError(error)}`)
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
         `Mailgun send failed (ref: ${corrId})`
@@ -186,19 +204,67 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
   }
 
   async getTemplates(): Promise<string[]> {
+    const corrId = newCorrelationId()
     try {
       const client = await this.initializeClient_()
       const result = await client.domains.domainTemplates.list(this.domain_)
-      return (result?.items ?? []).map((t: { name: string }) => t.name)
-    } catch (error: any) {
+      const items = (result as { items?: Array<{ name: string }> })?.items ?? []
+      return items.map((t) => t.name)
+    } catch (error: unknown) {
       // Log the full Mailgun error server-side; return only a generic message to callers
-      const corrId = Math.random().toString(36).slice(2, 10)
-      console.error(`[mailgun-service][${corrId}] getTemplates() failed:`, error)
+      this.logger_.error(`[mailgun-service][${corrId}] getTemplates() failed: ${formatError(error)}`)
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
         `Mailgun templates fetch failed (ref: ${corrId})`
       )
     }
+  }
+}
+
+/**
+ * Resolve the Medusa logger from the container; fall back to a console-backed
+ * shim when the container hasn't registered one (e.g. unit tests, validate-only
+ * usage). The shim conforms to the Logger interface for the call sites we use.
+ */
+function resolveLogger(container: Record<string, unknown>): Logger {
+  const resolveFn = (container as { resolve?: (key: string) => unknown })?.resolve
+  if (typeof resolveFn === "function") {
+    try {
+      const logger = resolveFn.call(container, ContainerRegistrationKeys.LOGGER)
+      if (logger) return logger as Logger
+    } catch {
+      // fall through to console shim
+    }
+  }
+  return consoleLogger
+}
+
+const consoleLogger: Logger = {
+  panic: (data: unknown) => console.error(data),
+  shouldLog: () => true,
+  setLogLevel: () => {},
+  unsetLogLevel: () => {},
+  activity: () => "",
+  progress: () => {},
+  error: (msg: unknown) => console.error(msg),
+  failure: (_a: unknown, msg: unknown) => console.error(msg),
+  success: () => {},
+  debug: (msg: unknown) => console.debug(msg),
+  info: (msg: unknown) => console.info(msg),
+  warn: (msg: unknown) => console.warn(msg),
+  log: (...args: unknown[]) => console.log(...args),
+} as unknown as Logger
+
+function newCorrelationId(): string {
+  return `mg_${randomUUID().replace(/-/g, "").slice(0, 12)}`
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) return error.stack || error.message
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
   }
 }
 

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-07
+
+### Changed
+- Properly typed the Mailgun client. `clientPromise_` and `initializeClient_()` now return `Interfaces.IMailgunClient` from `mailgun.js/definitions` instead of `any`, so call sites get real autocomplete and the compiler catches SDK signature drift (TICKET-1)
+- Replaced `(notification as any)` casts in `service.send()` with a local `MailgunNotificationDTO` extension and a single `toMailgunDTO()` narrowing helper. `from`, `attachments`, and other Mailgun-specific fields are now read off a typed shape (TICKET-2)
+- Extracted the checklist's `configModule` lookup into `findMailgunProviderConfig(scope)` (`src/modules/mailgun/config.ts`). The admin route no longer reaches into untyped `configModule.modules.notification.options.providers` directly (TICKET-5)
+- Deduplicated Mailgun client bootstrap into a new `src/modules/mailgun/client.ts` exporting `createMailgunClient(opts)`. The provider service and the checklist route now share one dynamic import + region→URL switch instead of each maintaining its own copy (TICKET-6)
+- All correlation IDs now come from `crypto.randomUUID()` and are prefixed with `mg_` (e.g. `mg_8f3a1b2c4d5e`) instead of the previous `Math.random().toString(36).slice(2, 10)` — collision-resistant and easy to grep across logs (TICKET-14)
+- The provider service and admin routes now log via Medusa's `Logger` (resolved through `ContainerRegistrationKeys.LOGGER`) instead of `console.error`. The service falls back to a console-backed shim when no container logger is registered (e.g. in unit tests) (TICKET-15)
+
+### Added
+- Plugin option `eventMap?: EventCheckConfig[]` on the Mailgun provider config. Entries override built-in checklist events with the same `event` key; new entries are appended. Lets host apps register custom notification events without forking the plugin (TICKET-8)
+
+### Fixed
+- Admin checklist hint text no longer truncates at the first `". "`. Hints with abbreviations (e.g. `v1.2`) used to lose everything after the period, and screen readers only saw the truncated half. The full hint now stays in the DOM and is collapsed visually via CSS `-webkit-line-clamp` with an `aria-expanded` show-more toggle (TICKET-17)
+
+### Changed
+- Removed the unused `coverageThreshold` block from `jest.config.ts`. The 80% statements gate never fired because `collectCoverage` was never enabled — keeping a fake gate around was misleading. Re-add both together if/when coverage gating becomes a real CI requirement (TICKET-11)
+- Replaced the per-row `forceUpdate` timer in the admin checklist with a single `useNow(60_000)` hook at the tab root. The "Checked N minutes ago" label is now wrapped in a semantic `<time dateTime>` element and updated by one shared interval instead of one per render (TICKET-16)
+
 ## [0.2.6] - 2026-04-07
 
 ### Fixed
