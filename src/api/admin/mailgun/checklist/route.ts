@@ -1,12 +1,34 @@
 import { AuthenticatedMedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { scanSubscribers, EVENT_MAP } from "./scan"
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
+import type { Logger } from "@medusajs/framework/types"
+import { randomUUID } from "crypto"
 import * as fs from "fs"
 import * as path from "path"
+import { scanSubscribers, EVENT_MAP, type EventCheckConfig } from "./scan"
+import { createMailgunClient } from "../../../../modules/mailgun/client"
+import { findMailgunProviderConfig } from "../../../../modules/mailgun/config"
+
+/**
+ * Merge plugin-supplied event map overrides with the built-in defaults.
+ * Caller-supplied entries override built-ins with the same `event` key;
+ * new entries are appended to the end of the list.
+ */
+function mergeEventMap(
+  base: EventCheckConfig[],
+  overrides?: EventCheckConfig[]
+): EventCheckConfig[] {
+  if (!overrides?.length) return base
+  const byEvent = new Map<string, EventCheckConfig>()
+  for (const e of base) byEvent.set(e.event, e)
+  for (const e of overrides) byEvent.set(e.event, e)
+  return Array.from(byEvent.values())
+}
 
 export const GET = async (
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse
 ) => {
+  const logger = req.scope.resolve(ContainerRegistrationKeys.LOGGER) as Logger
   const cwd = process.cwd()
   const subscriberRoot = path.join(cwd, "src", "subscribers")
   const subscriberRootFound = fs.existsSync(subscriberRoot)
@@ -14,37 +36,32 @@ export const GET = async (
   let mailgunTemplatesReachable = false
   let mailgunErrorMessage: string | undefined
 
+  const mailgunOptions = findMailgunProviderConfig(req.scope) ?? {}
+  const eventMap = mergeEventMap(EVENT_MAP, mailgunOptions.eventMap)
+
   // Scan subscribers
-  const scanResults = scanSubscribers(cwd, EVENT_MAP)
+  const scanResults = scanSubscribers(cwd, eventMap)
 
   // Fetch Mailgun templates using configured provider options
   let templateSet: Set<string> | null = null
 
-  const configModule = req.scope.resolve("configModule") as any
-  const providers: any[] = configModule?.modules?.["notification"]?.options?.providers ?? []
-  const mailgunOptions = providers.find((p: any) => p.id === "mailgun")?.options ?? {}
-  const apiKey: string | undefined = mailgunOptions.api_key
-  const domain: string | undefined = mailgunOptions.domain
-  const region: "us" | "eu" | undefined = mailgunOptions.region
+  const apiKey = mailgunOptions.api_key
+  const domain = mailgunOptions.domain
+  const region = mailgunOptions.region
 
   if (!apiKey || !domain) {
     mailgunErrorMessage = "Mailgun provider options (api_key, domain) not found. Ensure the plugin is registered in medusa-config.ts with id: \"mailgun\"."
   } else {
+    const corrId = newCorrelationId()
     try {
-      const { default: Mailgun } = await import("mailgun.js")
-      const { default: FormData } = await import("form-data")
-      const mailgun = new Mailgun(FormData)
-      const url = region === "eu"
-        ? "https://api.eu.mailgun.net"
-        : "https://api.mailgun.net"
-      const client = mailgun.client({ username: "api", key: apiKey, url })
+      const client = await createMailgunClient({ api_key: apiKey, region })
       const result = await client.domains.domainTemplates.list(domain)
-      templateSet = new Set((result?.items ?? []).map((t: any) => t.name))
+      const items = (result as { items?: Array<{ name: string }> })?.items ?? []
+      templateSet = new Set(items.map((t) => t.name))
       mailgunTemplatesReachable = true
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Log full error server-side; return only a generic message to clients
-      const corrId = Math.random().toString(36).slice(2, 10)
-      console.error(`[mailgun-checklist][${corrId}] Failed to fetch templates:`, err)
+      logger.error(`[mailgun-checklist][${corrId}] Failed to fetch templates: ${formatError(err)}`)
       mailgunErrorMessage = `Failed to fetch Mailgun templates (ref: ${corrId})`
       mailgunTemplatesReachable = false
     }
@@ -71,8 +88,19 @@ export const GET = async (
       status = "fail"
       hint = `No subscriber found for event "${scan.event}". Create src/subscribers/<name>.ts with config: { event: "${scan.event}" } and call createNotifications with template: "${scan.expected_template}".`
     } else if (!scan.template_name_in_subscriber) {
-      status = "inline"
-      hint = `Subscriber found but no static template name was detected. If this subscriber sends inline HTML or plain text, this is expected. If you intended to use Mailgun templates, add template: "your-template-name" to your createNotifications call.`
+      // TICKET-18: do not optimistically mark as inline. Require verifiable
+      // content (non-empty inline html/text) before granting "inline" status;
+      // otherwise surface as a warning so the rollup cannot report pass for a
+      // subscriber whose body we couldn't actually see.
+      if (scan.inline_html_present || scan.inline_text_present) {
+        status = "inline"
+        hint = `Subscriber sends inline ${
+          scan.inline_html_present ? "HTML" : "text"
+        } content. Inline bodies are not verified against Mailgun templates.`
+      } else {
+        status = "warn"
+        hint = `Subscriber found for "${scan.event}" but no static template name, inline html, or inline text was detected. Inline body not verified — add a static template: "your-template-name" or inline html/text to your createNotifications call.`
+      }
     } else {
       templateExistsInMailgun = templateSet !== null ? templateSet.has(scan.template_name_in_subscriber) : null
       if (templateExistsInMailgun === true) {
@@ -124,4 +152,17 @@ export const GET = async (
     inline_count: inlineCount,
     events,
   })
+}
+
+function newCorrelationId(): string {
+  return `mg_${randomUUID().replace(/-/g, "").slice(0, 12)}`
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) return error.stack || error.message
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
 }

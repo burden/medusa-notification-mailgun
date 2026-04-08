@@ -95,6 +95,28 @@ describe("validateOptions", () => {
   })
 })
 
+describe("client initialization", () => {
+  it("memoizes the in-flight client promise under concurrent cold-start sends", async () => {
+    // TICKET-4: two concurrent sends on a fresh instance must share one
+    // dynamic-import + Mailgun constructor, not race and double-initialize.
+    const Mailgun = (await import("mailgun.js")).default as unknown as jest.Mock
+    Mailgun.mockClear()
+    mockCreate.mockResolvedValue({ id: "msg-concurrent" })
+
+    const service = createService()
+    const payload = {
+      to: "user@example.com",
+      channel: "email",
+      template: null,
+      data: { text: "hi" },
+    } as any
+
+    await Promise.all([service.send(payload), service.send(payload)])
+
+    expect(Mailgun).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("send", () => {
   it("throws when 'to' is missing", async () => {
     const service = createService()
@@ -203,24 +225,23 @@ describe("send", () => {
     })
   })
 
-  describe("fallback path", () => {
-    it("JSON-stringifies data when no template, html, or text", async () => {
-      mockCreate.mockResolvedValue({ id: "msg-6" })
+  describe("no-content path", () => {
+    it("throws INVALID_DATA when no template, html, or text is provided", async () => {
       const service = createService()
       const data = { subject: "Test", order_id: "ord_1" }
 
-      await service.send({
-        to: "user@example.com",
-        channel: "email",
-        data,
-      } as any)
+      const thrown = await service
+        .send({
+          to: "user@example.com",
+          channel: "email",
+          data,
+        } as any)
+        .catch((e) => e)
 
-      expect(mockCreate).toHaveBeenCalledWith(
-        "mail.example.com",
-        expect.objectContaining({
-          text: JSON.stringify(data, null, 2),
-        })
-      )
+      expect(thrown).toBeInstanceOf(MedusaError)
+      expect(thrown.type).toBe(MedusaError.Types.INVALID_DATA)
+      expect(thrown.message).toMatch(/template, html, or text/)
+      expect(mockCreate).not.toHaveBeenCalled()
     })
   })
 
@@ -444,7 +465,7 @@ describe("send", () => {
       expect(thrown.message).not.toContain("secret-internal.com")
       expect(thrown.message).not.toContain("suspended")
       // Must include a correlation reference for support lookup
-      expect(thrown.message).toMatch(/ref: [a-z0-9]+/)
+      expect(thrown.message).toMatch(/ref: mg_[a-f0-9]+/)
     })
 
     it("re-throws INVALID_DATA errors without wrapping (safe validation errors)", async () => {
@@ -473,7 +494,7 @@ describe("send", () => {
       } as any).catch((e) => e)
 
       expect(thrown).toBeInstanceOf(MedusaError)
-      expect(thrown.message).toMatch(/Mailgun send failed \(ref: [a-z0-9]+\)/)
+      expect(thrown.message).toMatch(/Mailgun send failed \(ref: mg_[a-f0-9]+\)/)
     })
   })
 
@@ -586,7 +607,7 @@ describe("send", () => {
       expect(thrown).toBeInstanceOf(MedusaError)
       // Must not leak internal detail
       expect(thrown.message).not.toContain("secret-key-abc")
-      expect(thrown.message).toMatch(/ref: [a-z0-9]+/)
+      expect(thrown.message).toMatch(/ref: mg_[a-f0-9]+/)
     })
 
     it("handles errors with no message property and returns sanitized message", async () => {
@@ -595,7 +616,7 @@ describe("send", () => {
 
       const thrown = await service.getTemplates().catch((e) => e)
       expect(thrown).toBeInstanceOf(MedusaError)
-      expect(thrown.message).toMatch(/Mailgun templates fetch failed \(ref: [a-z0-9]+\)/)
+      expect(thrown.message).toMatch(/Mailgun templates fetch failed \(ref: mg_[a-f0-9]+\)/)
     })
   })
 })

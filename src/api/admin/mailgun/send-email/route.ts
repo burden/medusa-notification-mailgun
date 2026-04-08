@@ -1,5 +1,7 @@
-import { MedusaError, Modules } from "@medusajs/framework/utils"
+import { ContainerRegistrationKeys, MedusaError, Modules } from "@medusajs/framework/utils"
 import { AuthenticatedMedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import type { Logger } from "@medusajs/framework/types"
+import { randomUUID } from "crypto"
 import { z } from "zod"
 import { PostAdminMailgunTestSchema } from "./middlewares"
 
@@ -43,9 +45,11 @@ export const POST = async (
     })
 
     res.json({ success: true, notification_id: result?.id || result })
-  } catch (error: any) {
-    const corrId = Math.random().toString(36).slice(2, 10)
-    console.error(`[mailgun] test send failed (ref: ${corrId})`, error)
+  } catch (error: unknown) {
+    const logger = req.scope.resolve(ContainerRegistrationKeys.LOGGER) as Logger
+    const corrId = `mg_${randomUUID().replace(/-/g, "").slice(0, 12)}`
+    const detail = error instanceof Error ? error.stack || error.message : String(error)
+    logger.error(`[mailgun] test send failed (ref: ${corrId}): ${detail}`)
     throw new MedusaError(
       MedusaError.Types.UNEXPECTED_STATE,
       `Failed to send test email (ref: ${corrId})`
