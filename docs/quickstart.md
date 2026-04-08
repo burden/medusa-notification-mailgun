@@ -8,10 +8,10 @@ This tutorial walks you from a fresh Medusa installation to a working order conf
 ## 1. Install the plugin
 
 ```bash
-pnpm add @mdgar/medusa-notification-mailgun mailgun.js
+pnpm add @mdgar/medusa-notification-mailgun
 ```
 
-`mailgun.js` is a peer dependency — install it alongside the plugin.
+`mailgun.js` ships as a bundled dependency of the plugin — no separate install needed.
 
 ## 2. Add your Mailgun credentials
 

@@ -39,14 +39,14 @@ Sends transactional emails via the Mailgun HTTP API. Supports stored templates (
 ## Installation
 
 ```bash
-pnpm add @mdgar/medusa-notification-mailgun mailgun.js
+pnpm add @mdgar/medusa-notification-mailgun
 # or
-npm install @mdgar/medusa-notification-mailgun mailgun.js
+npm install @mdgar/medusa-notification-mailgun
 # or
-yarn add @mdgar/medusa-notification-mailgun mailgun.js
+yarn add @mdgar/medusa-notification-mailgun
 ```
 
-`mailgun.js` is a peer dependency — install it alongside the plugin.
+`mailgun.js` is bundled as a direct dependency of the plugin and will be installed automatically; you do not need to install it separately.
 
 ## Configuration
 
@@ -91,6 +91,31 @@ module.exports = defineConfig({
 | `domain`  | Yes      | —                    | Your verified Mailgun sending domain                  |
 | `from`    | No       | `noreply@<domain>`   | Default sender address used when `from` is not passed per-notification |
 | `region`  | No       | `"us"`               | Mailgun API region: `"us"` or `"eu"`                  |
+| `eventMap`| No       | built-in map         | `EventCheckConfig[]` — override or extend the checklist's event→template map without forking the plugin. Entries with an `event` key that matches a built-in are replaced; new entries are appended. |
+
+#### Customizing the checklist event map
+
+The admin "Event Checklist" tab scans your subscribers against a built-in list of Medusa events and their expected Mailgun template names (e.g. `order.placed` → `order-confirmation`). To add your own events or rename an expected template, pass `eventMap` in the provider options:
+
+```ts
+{
+  resolve: "@mdgar/medusa-notification-mailgun/providers/notification-mailgun",
+  id: "mailgun",
+  options: {
+    channels: ["email"],
+    api_key: process.env.MAILGUN_API_KEY,
+    domain: process.env.MAILGUN_DOMAIN,
+    eventMap: [
+      // Override a built-in: use a different template name for order.placed
+      { event: "order.placed", expected_template: "my-order-confirmation" },
+      // Append a custom event
+      { event: "loyalty.tier_upgraded", expected_template: "loyalty-upgrade" },
+    ],
+  },
+}
+```
+
+Each entry is `{ event: string; expected_template: string }`. The checklist endpoint merges your overrides onto the built-in map by `event` key.
 
 ## Environment variables
 
@@ -137,7 +162,7 @@ The `data` object controls how the email is built and carries template variables
 
 | Field     | Type     | Description                                                                 |
 |-----------|----------|-----------------------------------------------------------------------------|
-| `subject` | `string` | Email subject line. Optional — if omitted, Mailgun uses the subject defined in the stored template. Required when not using a stored template. |
+| `subject` | `string` | Email subject line. Optional — if omitted when using a stored template, Mailgun uses the subject defined in the template. Recommended when sending inline `html`/`text`. |
 | `locale`  | `string` | Selects a Mailgun template version (e.g. `"fr"`, `"de"`). Only used when `template` is set. |
 | `html`    | `string` | Inline HTML body. Used when no `template` is set.                           |
 | `text`    | `string` | Plain-text body. Used when neither `template` nor `html` is set.            |
@@ -152,7 +177,8 @@ The provider selects the message body using this priority order:
 1. `template` — a Mailgun stored template; all `data` fields are passed as `h:X-Mailgun-Variables`.
 2. `data.html` — raw HTML body (no template).
 3. `data.text` — plain-text body.
-4. Fallback — the entire `data` object is JSON-stringified and sent as plain text.
+
+If none of `template`, `data.html`, or `data.text` is provided, the provider throws `INVALID_DATA` rather than sending an email with a serialized DTO body.
 
 Use `data.html` or `data.text` when you want to generate content dynamically in code rather than maintain a template in the Mailgun dashboard.
 
@@ -248,7 +274,7 @@ await notificationService.createNotifications({
 } as any)
 ```
 
-`data.from` is also accepted, but is ignored when a plugin-level `from` is set in `medusa-config.ts`. The top-level `from` field shown above is the preferred method.
+`data.from` is also accepted, but is ignored when the top-level notification `from` field is set. Resolution order is: top-level `from` → `data.from` → plugin-level default `from` → `noreply@<domain>`. The top-level `from` field shown above is the preferred method.
 
 ## Wiring up Medusa events to templates
 
@@ -292,7 +318,7 @@ Sends a test email through the Mailgun notification provider.
 | `template` | `string`                  | No       | Mailgun template name. If omitted, `data.text` or `data.html` is used for the body. |
 | `from`     | `string` (email)          | No       | Sender address override. Defaults to the plugin's configured `from`. |
 | `reply_to` | `string` (email)          | No       | Reply-To address. When set, replies are directed to this address instead of the sender. |
-| `data`     | `Record<string, string>`  | No       | Template variables or body content (`html`, `text`). All values must be strings. |
+| `data`     | `object`                  | No       | Template variables or body content. Typed as `{ locale?: string; variables?: Record<string, unknown>; ... }` with additional keys allowed via passthrough (e.g. `html`, `text`). |
 
 **Constraint**: `to` must be the email address of a registered Medusa admin user. The endpoint looks up the address in the user service before sending. Arbitrary addresses are rejected.
 
@@ -404,11 +430,10 @@ Coverage includes:
 - `validateOptions` — rejects missing `api_key` or `domain`
 - Template path — `h:X-Mailgun-Variables` header, `t:version` locale selection
 - Inline HTML and plain-text paths
-- Fallback path — JSON-stringified `data`
 - Sender resolution — configured address vs. `noreply@<domain>` default
 - Subject omitted from payload when `data.subject` is absent (defers to template subject)
 - Base64 attachment decoding
-- Mailgun API error wrapping (`error.details`, `error.message`, unknown errors)
+- Mailgun API errors are wrapped in `MedusaError` with a sanitized, correlation-id'd message (`Mailgun send failed (ref: mg_…)`); raw error details are logged server-side only. `INVALID_DATA` validation errors are re-thrown unwrapped.
 - EU region endpoint selection (`https://api.eu.mailgun.net`)
 - Return value — `id` field with `message` field fallback
 
