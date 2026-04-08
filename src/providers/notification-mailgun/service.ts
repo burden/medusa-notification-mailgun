@@ -40,7 +40,7 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
     }
   }
 
-  private client_: any
+  private clientPromise_?: Promise<any>
   private domain_: string
   private from_: string
   private options_: MailgunOptions
@@ -54,23 +54,29 @@ class MailgunNotificationProviderService extends AbstractNotificationProviderSer
   }
 
   private async initializeClient_(): Promise<any> {
-    if (this.client_) {
-      return this.client_
+    // Memoize the in-flight promise so concurrent cold-start callers share one
+    // dynamic import + client construction. On failure, clear the cache so the
+    // next caller retries rather than permanently reusing a rejected promise.
+    if (this.clientPromise_) {
+      return this.clientPromise_
     }
-
-    const { default: Mailgun } = await import("mailgun.js")
-    const mailgun = new Mailgun(FormData)
-    const url =
-      this.options_.region === "eu"
-        ? "https://api.eu.mailgun.net"
-        : "https://api.mailgun.net"
-
-    this.client_ = mailgun.client({
-      username: "api",
-      key: this.options_.api_key,
-      url,
+    this.clientPromise_ = (async () => {
+      const { default: Mailgun } = await import("mailgun.js")
+      const mailgun = new Mailgun(FormData)
+      const url =
+        this.options_.region === "eu"
+          ? "https://api.eu.mailgun.net"
+          : "https://api.mailgun.net"
+      return mailgun.client({
+        username: "api",
+        key: this.options_.api_key,
+        url,
+      })
+    })().catch((err) => {
+      this.clientPromise_ = undefined
+      throw err
     })
-    return this.client_
+    return this.clientPromise_
   }
 
   async send(

@@ -39,7 +39,6 @@ interface ChecklistEvent {
 interface ChecklistResponse {
   status: "pass" | "warn" | "fail"
   checked_at: string
-  subscriber_root: string
   subscriber_root_found: boolean
   mailgun_templates_reachable: boolean
   mailgun_error?: string
@@ -469,7 +468,7 @@ const ChecklistTab = () => {
       {checklist && !checklist.subscriber_root_found && (
         <div className="border border-red-500 rounded px-4 py-3">
           <Text size="small">
-            Subscriber directory not found at {checklist.subscriber_root}. Create this directory in your Medusa project.
+            Subscriber directory not found. Create <code>src/subscribers/</code> in your Medusa project.
           </Text>
         </div>
       )}

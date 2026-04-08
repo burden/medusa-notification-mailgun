@@ -158,6 +158,86 @@ describe("scanSubscribers", () => {
     }
   })
 
+  it("extracts template names from no-substitution template literals (backticks)", () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReaddirSync.mockReturnValue(["order.ts"])
+    mockReadFileSync.mockReturnValue(
+      "export const config = { event: \"order.placed\" }\n" +
+        "createNotifications({ template: `order-confirmation` })"
+    )
+
+    const results = scanSubscribers("/fake/cwd", eventMap)
+    const orderPlaced = results.find((r) => r.event === "order.placed")!
+
+    expect(orderPlaced.template_name_in_subscriber).toBe("order-confirmation")
+  })
+
+  it("returns null template name when template is a dynamic expression", () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReaddirSync.mockReturnValue(["order.ts"])
+    mockReadFileSync.mockReturnValue(
+      "export const config = { event: \"order.placed\" }\n" +
+        "const name = 'order-confirmation'\n" +
+        "createNotifications({ template: name })"
+    )
+
+    const results = scanSubscribers("/fake/cwd", eventMap)
+    const orderPlaced = results.find((r) => r.event === "order.placed")!
+
+    expect(orderPlaced.subscriber_found).toBe(true)
+    expect(orderPlaced.template_name_in_subscriber).toBeNull()
+  })
+
+  it("detects inline html and text presence in createNotifications calls", () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReaddirSync.mockReturnValue(["order.ts"])
+    mockReadFileSync.mockReturnValue(
+      `export const config = { event: "order.placed" }
+       createNotifications({ html: "<p>Thanks</p>", text: "Thanks" })`
+    )
+
+    const results = scanSubscribers("/fake/cwd", eventMap)
+    const orderPlaced = results.find((r) => r.event === "order.placed")!
+
+    expect(orderPlaced.template_name_in_subscriber).toBeNull()
+    expect(orderPlaced.inline_html_present).toBe(true)
+    expect(orderPlaced.inline_text_present).toBe(true)
+  })
+
+  it("picks the template matching expected name when a multi-handler file has several createNotifications calls", () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReaddirSync.mockReturnValue(["multi.ts"])
+    mockReadFileSync.mockReturnValue(
+      `export const config = { event: "order.placed" }
+       if (x) createNotifications({ template: "some-other-template" })
+       else   createNotifications({ template: "order-confirmation" })`
+    )
+
+    const results = scanSubscribers("/fake/cwd", eventMap)
+    const orderPlaced = results.find((r) => r.event === "order.placed")!
+
+    expect(orderPlaced.template_name_in_subscriber).toBe("order-confirmation")
+  })
+
+  it("ignores unrelated `template:` keys on non-notification object literals", () => {
+    // The old regex scanner would grab the first `template:` literal anywhere
+    // in the file, even on unrelated objects. AST walk should still surface it
+    // as *some* static template, but the matcher should prefer the expected
+    // one when present.
+    mockExistsSync.mockReturnValue(true)
+    mockReaddirSync.mockReturnValue(["order.ts"])
+    mockReadFileSync.mockReturnValue(
+      `export const config = { event: "order.placed" }
+       const meta = { template: "unrelated-metadata-value" }
+       createNotifications({ template: "order-confirmation" })`
+    )
+
+    const results = scanSubscribers("/fake/cwd", eventMap)
+    const orderPlaced = results.find((r) => r.event === "order.placed")!
+
+    expect(orderPlaced.template_name_in_subscriber).toBe("order-confirmation")
+  })
+
   it("maps each event to its correct file when subscribers are spread across multiple files", () => {
     mockExistsSync.mockReturnValue(true)
     mockReaddirSync.mockReturnValue(["order-placed.ts", "order-canceled.ts"])

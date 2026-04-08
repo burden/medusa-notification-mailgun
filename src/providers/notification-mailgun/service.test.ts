@@ -95,6 +95,28 @@ describe("validateOptions", () => {
   })
 })
 
+describe("client initialization", () => {
+  it("memoizes the in-flight client promise under concurrent cold-start sends", async () => {
+    // TICKET-4: two concurrent sends on a fresh instance must share one
+    // dynamic-import + Mailgun constructor, not race and double-initialize.
+    const Mailgun = (await import("mailgun.js")).default as unknown as jest.Mock
+    Mailgun.mockClear()
+    mockCreate.mockResolvedValue({ id: "msg-concurrent" })
+
+    const service = createService()
+    const payload = {
+      to: "user@example.com",
+      channel: "email",
+      template: null,
+      data: { text: "hi" },
+    } as any
+
+    await Promise.all([service.send(payload), service.send(payload)])
+
+    expect(Mailgun).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("send", () => {
   it("throws when 'to' is missing", async () => {
     const service = createService()

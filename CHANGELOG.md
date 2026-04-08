@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-04-07
+
+### Fixed
+- Eliminated a race in `initializeClient_` where concurrent cold-start sends each ran the dynamic `mailgun.js` import and constructed a client; the in-flight promise is now memoized and cleared on failure so retries still work (TICKET-4)
+- Replaced the regex-based subscriber template scanner with a TypeScript AST walk that correctly handles multi-handler files, no-substitution template literals (backticks), dynamic template expressions, and unrelated `template:` keys on non-notification objects (TICKET-7)
+- Removed `subscriber_root` from the admin checklist response type and UI; the absolute filesystem path was never returned by the route and previously rendered `undefined` in the "subscriber directory not found" banner (TICKET-9)
+- Checklist rollup no longer reports `pass` for subscribers that couldn't be verified. Subscribers with neither a static template nor inline `html`/`text` now surface as `warn` ("inline body not verified") instead of silently passing as `inline` (TICKET-18)
+
+### Changed
+- `SubscriberScanResult` now includes `inline_html_present` and `inline_text_present` flags so the checklist can distinguish verified inline bodies from subscribers with no detectable content
+- Added `typescript` to `dependencies` — the checklist scanner now uses the TypeScript compiler API at runtime
+
+### Breaking
+- Checklist events that previously reported `inline` with no detectable `html`/`text` will now report `warn`. Projects relying on the old optimistic pass should either add a static `template` name or inline body to their `createNotifications` call.
+
 ## [0.2.5] - 2026-04-07
 
 ### Fixed

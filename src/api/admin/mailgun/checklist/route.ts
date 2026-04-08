@@ -71,8 +71,19 @@ export const GET = async (
       status = "fail"
       hint = `No subscriber found for event "${scan.event}". Create src/subscribers/<name>.ts with config: { event: "${scan.event}" } and call createNotifications with template: "${scan.expected_template}".`
     } else if (!scan.template_name_in_subscriber) {
-      status = "inline"
-      hint = `Subscriber found but no static template name was detected. If this subscriber sends inline HTML or plain text, this is expected. If you intended to use Mailgun templates, add template: "your-template-name" to your createNotifications call.`
+      // TICKET-18: do not optimistically mark as inline. Require verifiable
+      // content (non-empty inline html/text) before granting "inline" status;
+      // otherwise surface as a warning so the rollup cannot report pass for a
+      // subscriber whose body we couldn't actually see.
+      if (scan.inline_html_present || scan.inline_text_present) {
+        status = "inline"
+        hint = `Subscriber sends inline ${
+          scan.inline_html_present ? "HTML" : "text"
+        } content. Inline bodies are not verified against Mailgun templates.`
+      } else {
+        status = "warn"
+        hint = `Subscriber found for "${scan.event}" but no static template name, inline html, or inline text was detected. Inline body not verified — add a static template: "your-template-name" or inline html/text to your createNotifications call.`
+      }
     } else {
       templateExistsInMailgun = templateSet !== null ? templateSet.has(scan.template_name_in_subscriber) : null
       if (templateExistsInMailgun === true) {
